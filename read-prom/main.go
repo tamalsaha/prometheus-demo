@@ -2,16 +2,15 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
-	"math"
 	"strconv"
 	"strings"
 	"time"
 
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/tamalsaha/prometheus-demo/prometheus"
+	"sigs.k8s.io/yaml"
 )
 
 func main() {
@@ -35,7 +34,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to get prometheus cpu query result, reason: %v", err)
 	}
-	data, _ := json.Marshal(res)
+	data, _ := yaml.Marshal(res)
 	fmt.Println(string(data))
 }
 
@@ -74,21 +73,4 @@ func getPromQueryResult(pc promv1.API, promQuery string) (map[string]float64, er
 	}
 
 	return metricsMap, nil
-}
-
-func convertBytesToSize(b float64) string {
-	ans := float64(0)
-	tb := math.Pow(2, 40)
-	gb := math.Pow(2, 30)
-	mb := math.Pow(2, 20)
-	if b >= tb {
-		ans = b / tb
-		return fmt.Sprintf("%vTi", math.Round(ans))
-	}
-	if b >= gb {
-		ans = b / gb
-		return fmt.Sprintf("%vGi", math.Round(ans))
-	}
-	ans = b / mb
-	return fmt.Sprintf("%vMi", math.Round(ans))
 }

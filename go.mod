@@ -7,6 +7,7 @@ require (
 	github.com/prometheus/common v0.32.1
 	github.com/spf13/pflag v1.0.5
 	go.bytebuilders.dev/license-verifier v0.9.7
+	sigs.k8s.io/yaml v1.2.0
 )
 
 require (
