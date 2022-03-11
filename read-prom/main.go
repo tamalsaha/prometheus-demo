@@ -3,19 +3,33 @@ package main
 import (
 	"context"
 	"fmt"
+	"k8s.io/client-go/kubernetes"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/tamalsaha/prometheus-demo/prometheus"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/yaml"
 )
 
 // ref: https://kubernetes.io/docs/tasks/administer-cluster/access-cluster-services/#manually-constructing-apiserver-proxy-urls
 func main() {
-	cfg := prometheus.Config{
+	cfg := ctrl.GetConfigOrDie()
+
+	// k port-forward sts/prometheus-kube-prometheus-stack-prometheus 9090:9090 -n monitoring
+	kc := kubernetes.NewForConfigOrDie(cfg)
+	rw := kc.CoreV1().Services("monitoring").ProxyGet("http", "kube-prometheus-stack-prometheus", "9090", "/api/v1/query", map[string]string{
+		"query": "up",
+	})
+	data2, err := rw.DoRaw(context.TODO())
+	fmt.Println(string(data2))
+	os.Exit(1)
+
+	promConfig := prometheus.Config{
 		Addr: "http://localhost:9090",
 		// BasicAuth:       prometheus.BasicAuth{},
 		// BearerToken:     "",
@@ -23,7 +37,7 @@ func main() {
 		// ProxyURL:        "",
 		// TLSConfig:       prom_config.TLSConfig{},
 	}
-	pc, err := cfg.NewPrometheusClient()
+	pc, err := promConfig.NewPrometheusClient()
 	if err != nil {
 		panic(err)
 	}
