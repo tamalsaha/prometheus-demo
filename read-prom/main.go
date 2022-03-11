@@ -5,6 +5,7 @@ import (
 	"fmt"
 	prom_config "github.com/prometheus/common/config"
 	"io/ioutil"
+	"k8s.io/client-go/rest"
 	"log"
 	"os"
 	"path/filepath"
@@ -29,6 +30,7 @@ var tmpDir = func() string {
 // ref: https://kubernetes.io/docs/tasks/administer-cluster/access-cluster-services/#manually-constructing-apiserver-proxy-urls
 func main() {
 	cfg := ctrl.GetConfigOrDie()
+	rest.LoadTLSFiles(cfg)
 
 	//// k port-forward sts/prometheus-kube-prometheus-stack-prometheus 9090:9090 -n monitoring
 	//kc := kubernetes.NewForConfigOrDie(cfg)
