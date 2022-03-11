@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
-	"k8s.io/client-go/kubernetes"
+	prom_config "github.com/prometheus/common/config"
+	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -16,27 +18,59 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+var tmpDir = func() string {
+	dir, err := os.MkdirTemp("/tmp", "prometheus-*")
+	if err != nil {
+		panic(err)
+	}
+	return dir
+}()
+
 // ref: https://kubernetes.io/docs/tasks/administer-cluster/access-cluster-services/#manually-constructing-apiserver-proxy-urls
 func main() {
 	cfg := ctrl.GetConfigOrDie()
 
-	// k port-forward sts/prometheus-kube-prometheus-stack-prometheus 9090:9090 -n monitoring
-	kc := kubernetes.NewForConfigOrDie(cfg)
-	rw := kc.CoreV1().Services("monitoring").ProxyGet("http", "kube-prometheus-stack-prometheus", "9090", "/api/v1/query", map[string]string{
-		"query": "up",
-	})
-	data2, err := rw.DoRaw(context.TODO())
-	fmt.Println(string(data2))
-	os.Exit(1)
+	//// k port-forward sts/prometheus-kube-prometheus-stack-prometheus 9090:9090 -n monitoring
+	//kc := kubernetes.NewForConfigOrDie(cfg)
+	//rw := kc.CoreV1().Services("monitoring").ProxyGet("http", "kube-prometheus-stack-prometheus", "9090", "/api/v1/query", map[string]string{
+	//	"query": "up",
+	//})
+	//data2, err := rw.DoRaw(context.TODO())
+	//fmt.Println(string(data2))
+
+	ioutil.WriteFile(filepath.Join(tmpDir, "ca.crt"), cfg.TLSClientConfig.CAData, 0644)
+	ioutil.WriteFile(filepath.Join(tmpDir, "tls.crt"), cfg.TLSClientConfig.CertData, 0644)
+	ioutil.WriteFile(filepath.Join(tmpDir, "tls.key"), cfg.TLSClientConfig.KeyData, 0644)
 
 	promConfig := prometheus.Config{
-		Addr: "http://localhost:9090",
-		// BasicAuth:       prometheus.BasicAuth{},
-		// BearerToken:     "",
-		// BearerTokenFile: "",
-		// ProxyURL:        "",
-		// TLSConfig:       prom_config.TLSConfig{},
+		Addr: fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:%s:%s/proxy/", cfg.Host, "monitoring", "http", "kube-prometheus-stack-prometheus", "9090"),
+		BasicAuth: prometheus.BasicAuth{
+			Username:     cfg.Username,
+			Password:     cfg.Password,
+			PasswordFile: "",
+		},
+		BearerToken:     cfg.BearerToken,
+		BearerTokenFile: cfg.BearerTokenFile,
+		ProxyURL:        "",
+		TLSConfig: prom_config.TLSConfig{
+			CAFile:             filepath.Join(tmpDir, "ca.crt"),
+			CertFile:           filepath.Join(tmpDir, "tls.crt"),
+			KeyFile:            filepath.Join(tmpDir, "tls.key"),
+			ServerName:         "",
+			InsecureSkipVerify: true,
+		},
 	}
+
+	// os.Exit(1)
+
+	//promConfig := prometheus.Config{
+	//	Addr: "http://localhost:9090",
+	//	// BasicAuth:       prometheus.BasicAuth{},
+	//	// BearerToken:     "",
+	//	// BearerTokenFile: "",
+	//	// ProxyURL:        "",
+	//	// TLSConfig:       prom_config.TLSConfig{},
+	//}
 	pc, err := promConfig.NewPrometheusClient()
 	if err != nil {
 		panic(err)
