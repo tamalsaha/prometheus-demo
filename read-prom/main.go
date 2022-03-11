@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+// ref: https://kubernetes.io/docs/tasks/administer-cluster/access-cluster-services/#manually-constructing-apiserver-proxy-urls
 func main() {
 	cfg := prometheus.Config{
 		Addr: "http://localhost:9090",
