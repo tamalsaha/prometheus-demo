@@ -3,15 +3,17 @@ package main
 import (
 	"context"
 	"fmt"
-	prom_config "github.com/prometheus/common/config"
 	"io/ioutil"
-	"k8s.io/client-go/rest"
 	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	prom_config "github.com/prometheus/common/config"
+
+	"k8s.io/client-go/rest"
 
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/tamalsaha/prometheus-demo/prometheus"
@@ -27,6 +29,57 @@ var tmpDir = func() string {
 	return dir
 }()
 
+type ServiceReference struct {
+	Scheme    string
+	Name      string
+	Namespace string
+	Port      int
+}
+
+func ToPrometheusConfig(cfg *rest.Config, ref ServiceReference) (*prometheus.Config, error) {
+	if err := rest.LoadTLSFiles(cfg); err != nil {
+		return nil, err
+	}
+
+	certDir, err := os.MkdirTemp("/tmp", "prometheus-*")
+	if err != nil {
+		return nil, err
+	}
+
+	caFile := filepath.Join(certDir, "ca.crt")
+	certFile := filepath.Join(certDir, "tls.crt")
+	keyFile := filepath.Join(certDir, "tls.key")
+
+	if err := ioutil.WriteFile(caFile, cfg.TLSClientConfig.CAData, 0o644); err != nil {
+		return nil, err
+	}
+	if err := ioutil.WriteFile(certFile, cfg.TLSClientConfig.CertData, 0o644); err != nil {
+		return nil, err
+	}
+	if err := ioutil.WriteFile(keyFile, cfg.TLSClientConfig.KeyData, 0o644); err != nil {
+		return nil, err
+	}
+
+	return &prometheus.Config{
+		Addr: fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:%s:%d/proxy/", cfg.Host, ref.Namespace, ref.Scheme, ref.Name, ref.Port),
+		BasicAuth: prometheus.BasicAuth{
+			Username:     cfg.Username,
+			Password:     cfg.Password,
+			PasswordFile: "",
+		},
+		BearerToken:     cfg.BearerToken,
+		BearerTokenFile: cfg.BearerTokenFile,
+		ProxyURL:        "",
+		TLSConfig: prom_config.TLSConfig{
+			CAFile:             caFile,
+			CertFile:           certFile,
+			KeyFile:            keyFile,
+			ServerName:         cfg.TLSClientConfig.ServerName,
+			InsecureSkipVerify: cfg.TLSClientConfig.Insecure,
+		},
+	}, nil
+}
+
 // ref: https://kubernetes.io/docs/tasks/administer-cluster/access-cluster-services/#manually-constructing-apiserver-proxy-urls
 func main() {
 	cfg := ctrl.GetConfigOrDie()
@@ -40,9 +93,9 @@ func main() {
 	//data2, err := rw.DoRaw(context.TODO())
 	//fmt.Println(string(data2))
 
-	ioutil.WriteFile(filepath.Join(tmpDir, "ca.crt"), cfg.TLSClientConfig.CAData, 0644)
-	ioutil.WriteFile(filepath.Join(tmpDir, "tls.crt"), cfg.TLSClientConfig.CertData, 0644)
-	ioutil.WriteFile(filepath.Join(tmpDir, "tls.key"), cfg.TLSClientConfig.KeyData, 0644)
+	ioutil.WriteFile(filepath.Join(tmpDir, "ca.crt"), cfg.TLSClientConfig.CAData, 0o644)
+	ioutil.WriteFile(filepath.Join(tmpDir, "tls.crt"), cfg.TLSClientConfig.CertData, 0o644)
+	ioutil.WriteFile(filepath.Join(tmpDir, "tls.key"), cfg.TLSClientConfig.KeyData, 0o644)
 
 	promConfig := prometheus.Config{
 		Addr: fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:%s:%s/proxy/", cfg.Host, "monitoring", "http", "kube-prometheus-stack-prometheus", "9090"),
@@ -58,8 +111,8 @@ func main() {
 			CAFile:             filepath.Join(tmpDir, "ca.crt"),
 			CertFile:           filepath.Join(tmpDir, "tls.crt"),
 			KeyFile:            filepath.Join(tmpDir, "tls.key"),
-			ServerName:         "",
-			InsecureSkipVerify: true,
+			ServerName:         cfg.TLSClientConfig.ServerName,
+			InsecureSkipVerify: false,
 		},
 	}
 
