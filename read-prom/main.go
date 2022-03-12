@@ -83,7 +83,6 @@ func ToPrometheusConfig(cfg *rest.Config, ref ServiceReference) (*prometheus.Con
 // ref: https://kubernetes.io/docs/tasks/administer-cluster/access-cluster-services/#manually-constructing-apiserver-proxy-urls
 func main() {
 	cfg := ctrl.GetConfigOrDie()
-	rest.LoadTLSFiles(cfg)
 
 	//// k port-forward sts/prometheus-kube-prometheus-stack-prometheus 9090:9090 -n monitoring
 	//kc := kubernetes.NewForConfigOrDie(cfg)
@@ -93,39 +92,12 @@ func main() {
 	//data2, err := rw.DoRaw(context.TODO())
 	//fmt.Println(string(data2))
 
-	ioutil.WriteFile(filepath.Join(tmpDir, "ca.crt"), cfg.TLSClientConfig.CAData, 0o644)
-	ioutil.WriteFile(filepath.Join(tmpDir, "tls.crt"), cfg.TLSClientConfig.CertData, 0o644)
-	ioutil.WriteFile(filepath.Join(tmpDir, "tls.key"), cfg.TLSClientConfig.KeyData, 0o644)
-
-	promConfig := prometheus.Config{
-		Addr: fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:%s:%s/proxy/", cfg.Host, "monitoring", "http", "kube-prometheus-stack-prometheus", "9090"),
-		BasicAuth: prometheus.BasicAuth{
-			Username:     cfg.Username,
-			Password:     cfg.Password,
-			PasswordFile: "",
-		},
-		BearerToken:     cfg.BearerToken,
-		BearerTokenFile: cfg.BearerTokenFile,
-		ProxyURL:        "",
-		TLSConfig: prom_config.TLSConfig{
-			CAFile:             filepath.Join(tmpDir, "ca.crt"),
-			CertFile:           filepath.Join(tmpDir, "tls.crt"),
-			KeyFile:            filepath.Join(tmpDir, "tls.key"),
-			ServerName:         cfg.TLSClientConfig.ServerName,
-			InsecureSkipVerify: false,
-		},
-	}
-
-	// os.Exit(1)
-
-	//promConfig := prometheus.Config{
-	//	Addr: "http://localhost:9090",
-	//	// BasicAuth:       prometheus.BasicAuth{},
-	//	// BearerToken:     "",
-	//	// BearerTokenFile: "",
-	//	// ProxyURL:        "",
-	//	// TLSConfig:       prom_config.TLSConfig{},
-	//}
+	promConfig, err := ToPrometheusConfig(cfg, ServiceReference{
+		Scheme:    "http",
+		Name:      "kube-prometheus-stack-prometheus",
+		Namespace: "monitoring",
+		Port:      9090,
+	})
 	pc, err := promConfig.NewPrometheusClient()
 	if err != nil {
 		panic(err)
