@@ -41,7 +41,7 @@ func ToPrometheusConfig(cfg *rest.Config, ref ServiceReference) (*prometheus.Con
 		return nil, err
 	}
 
-	certDir, err := os.MkdirTemp("/tmp", "prometheus-*")
+	certDir, err := os.MkdirTemp(os.TempDir(), "prometheus-*")
 	if err != nil {
 		return nil, err
 	}
