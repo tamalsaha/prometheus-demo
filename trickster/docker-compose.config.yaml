@@ -1,0 +1,1029 @@
+main:
+  config_handler_path: /trickster/config
+  ping_handler_path: /trickster/ping
+  reload_handler_path: /trickster/config/reload
+  health_handler_path: /trickster/health
+  pprof_server: both
+  server_name: 64af4900b318
+backends:
+  influx1:
+    provider: influxdb
+    origin_url: http://influxdb:8086
+    timeout_ms: 180000
+    keep_alive_timeout_ms: 300000
+    max_idle_conns: 20
+    cache_name: mem1
+    cache_key_prefix: influxdb:8086
+    healthcheck:
+      verb: GET
+      scheme: http
+      host: influxdb:8086
+      path: /health
+      expected_codes:
+      - 200
+    timeseries_retention_factor: 1024
+    timeseries_eviction_method: oldest
+    backfill_tolerance_ms: 60000
+    paths:
+      /-0000000101:
+        path: /
+        match_type: prefix
+        handler: proxy
+        methods:
+        - GET
+        - POST
+        no_metrics: false
+        reqrewriter: []
+      /query-0000000101:
+        path: /query
+        match_type: exact
+        handler: query
+        methods:
+        - GET
+        - POST
+        cache_key_params:
+        - db
+        - q
+        - u
+        - p
+        no_metrics: false
+        reqrewriter: []
+    negative_cache_name: default
+    timeseries_ttl_ms: 21600000
+    fastforward_ttl_ms: 15000
+    max_ttl_ms: 86400000
+    revalidation_factor: 2
+    max_object_size_bytes: 524288
+    tracing_name: jc1
+    tls: {}
+    forwarded_headers: standard
+    fast_forward_disable: true
+    reqrewriter: []
+  prom1:
+    provider: prometheus
+    origin_url: http://prometheus:9090
+    timeout_ms: 180000
+    keep_alive_timeout_ms: 300000
+    max_idle_conns: 20
+    cache_name: mem1
+    cache_key_prefix: prometheus:9090
+    healthcheck:
+      verb: GET
+      scheme: http
+      host: prometheus:9090
+      path: /api/v1/query
+      query: query=up
+      expected_codes:
+      - 200
+    timeseries_retention_factor: 1024
+    timeseries_eviction_method: oldest
+    paths:
+      /-0000000101:
+        path: /
+        match_type: prefix
+        handler: proxy
+        methods:
+        - GET
+        - POST
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/-0000000101:
+        path: /api/v1/
+        match_type: prefix
+        handler: proxy
+        methods:
+        - GET
+        - POST
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/admin-1111111111:
+        path: /api/v1/admin
+        match_type: prefix
+        handler: admin
+        methods:
+        - GET
+        - HEAD
+        - POST
+        - PUT
+        - DELETE
+        - CONNECT
+        - OPTIONS
+        - TRACE
+        - PATCH
+        - PURGE
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/alertmanagers-0000000001:
+        path: /api/v1/alertmanagers
+        match_type: exact
+        handler: proxycache
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/alerts-0000000001:
+        path: /api/v1/alerts
+        match_type: exact
+        handler: alerts
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/label/-0000000001:
+        path: /api/v1/label/
+        match_type: prefix
+        handler: labels
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/labels-0000000101:
+        path: /api/v1/labels
+        match_type: exact
+        handler: labels
+        methods:
+        - GET
+        - POST
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/query-0000000101:
+        path: /api/v1/query
+        match_type: exact
+        handler: query
+        methods:
+        - GET
+        - POST
+        cache_key_params:
+        - query
+        - time
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/query_range-0000000101:
+        path: /api/v1/query_range
+        match_type: exact
+        handler: query_range
+        methods:
+        - GET
+        - POST
+        cache_key_params:
+        - query
+        - step
+        response_headers:
+          Cache-Control: s-maxage=21600
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/rules-0000000001:
+        path: /api/v1/rules
+        match_type: exact
+        handler: proxycache
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/series-0000000101:
+        path: /api/v1/series
+        match_type: exact
+        handler: series
+        methods:
+        - GET
+        - POST
+        cache_key_params:
+        - match[]
+        - start
+        - end
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/status-0000000001:
+        path: /api/v1/status
+        match_type: prefix
+        handler: proxycache
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/targets-0000000001:
+        path: /api/v1/targets
+        match_type: exact
+        handler: proxycache
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/targets/metadata-0000000001:
+        path: /api/v1/targets/metadata
+        match_type: exact
+        handler: proxycache
+        methods:
+        - GET
+        cache_key_params:
+        - match_target
+        - metric
+        - limit
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+    negative_cache_name: default
+    timeseries_ttl_ms: 21600000
+    fastforward_ttl_ms: 15000
+    max_ttl_ms: 86400000
+    revalidation_factor: 2
+    max_object_size_bytes: 524288
+    tracing_name: std1
+    prometheus:
+      instant_round_ms: 15000
+    tls: {}
+    forwarded_headers: standard
+    reqrewriter: []
+  prom2:
+    provider: prometheus
+    origin_url: http://prometheus:9090
+    timeout_ms: 180000
+    keep_alive_timeout_ms: 300000
+    max_idle_conns: 20
+    cache_name: fs1
+    cache_key_prefix: prometheus:9090
+    healthcheck:
+      verb: GET
+      scheme: http
+      host: prometheus:9090
+      path: /api/v1/query
+      query: query=up
+      expected_codes:
+      - 200
+    timeseries_retention_factor: 1024
+    timeseries_eviction_method: oldest
+    paths:
+      /-0000000101:
+        path: /
+        match_type: prefix
+        handler: proxy
+        methods:
+        - GET
+        - POST
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/-0000000101:
+        path: /api/v1/
+        match_type: prefix
+        handler: proxy
+        methods:
+        - GET
+        - POST
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/admin-1111111111:
+        path: /api/v1/admin
+        match_type: prefix
+        handler: admin
+        methods:
+        - GET
+        - HEAD
+        - POST
+        - PUT
+        - DELETE
+        - CONNECT
+        - OPTIONS
+        - TRACE
+        - PATCH
+        - PURGE
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/alertmanagers-0000000001:
+        path: /api/v1/alertmanagers
+        match_type: exact
+        handler: proxycache
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/alerts-0000000001:
+        path: /api/v1/alerts
+        match_type: exact
+        handler: alerts
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/label/-0000000001:
+        path: /api/v1/label/
+        match_type: prefix
+        handler: labels
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/labels-0000000101:
+        path: /api/v1/labels
+        match_type: exact
+        handler: labels
+        methods:
+        - GET
+        - POST
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/query-0000000101:
+        path: /api/v1/query
+        match_type: exact
+        handler: query
+        methods:
+        - GET
+        - POST
+        cache_key_params:
+        - query
+        - time
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/query_range-0000000101:
+        path: /api/v1/query_range
+        match_type: exact
+        handler: query_range
+        methods:
+        - GET
+        - POST
+        cache_key_params:
+        - query
+        - step
+        response_headers:
+          Cache-Control: s-maxage=21600
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/rules-0000000001:
+        path: /api/v1/rules
+        match_type: exact
+        handler: proxycache
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/series-0000000101:
+        path: /api/v1/series
+        match_type: exact
+        handler: series
+        methods:
+        - GET
+        - POST
+        cache_key_params:
+        - match[]
+        - start
+        - end
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/status-0000000001:
+        path: /api/v1/status
+        match_type: prefix
+        handler: proxycache
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/targets-0000000001:
+        path: /api/v1/targets
+        match_type: exact
+        handler: proxycache
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/targets/metadata-0000000001:
+        path: /api/v1/targets/metadata
+        match_type: exact
+        handler: proxycache
+        methods:
+        - GET
+        cache_key_params:
+        - match_target
+        - metric
+        - limit
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+    negative_cache_name: default
+    timeseries_ttl_ms: 21600000
+    fastforward_ttl_ms: 15000
+    max_ttl_ms: 86400000
+    revalidation_factor: 2
+    max_object_size_bytes: 524288
+    tracing_name: jc1
+    prometheus:
+      instant_round_ms: 15000
+    tls: {}
+    forwarded_headers: standard
+    reqrewriter: []
+  rpc1:
+    provider: reverseproxycache
+    origin_url: http://mockster:8482/byterange
+    timeout_ms: 180000
+    keep_alive_timeout_ms: 300000
+    max_idle_conns: 20
+    cache_name: mem1
+    cache_key_prefix: mockster:8482
+    healthcheck:
+      verb: GET
+      scheme: http
+      host: mockster:8482
+      path: /byterange
+      expected_codes:
+      - 200
+    timeseries_retention_factor: 1024
+    timeseries_eviction_method: oldest
+    paths:
+      /-0000000011:
+        path: /
+        match_type: prefix
+        handler: proxycache
+        methods:
+        - GET
+        - HEAD
+        no_metrics: false
+        reqrewriter: []
+      /-1111111100:
+        path: /
+        match_type: prefix
+        handler: proxy
+        methods:
+        - POST
+        - PUT
+        - DELETE
+        - CONNECT
+        - OPTIONS
+        - TRACE
+        - PATCH
+        - PURGE
+        no_metrics: false
+        reqrewriter: []
+    negative_cache_name: default
+    timeseries_ttl_ms: 21600000
+    fastforward_ttl_ms: 15000
+    max_ttl_ms: 86400000
+    revalidation_factor: 2
+    max_object_size_bytes: 524288
+    tracing_name: ja1
+    tls: {}
+    forwarded_headers: standard
+    reqrewriter: []
+  sim1:
+    provider: prometheus
+    origin_url: http://mockster:8482/prometheus
+    timeout_ms: 180000
+    keep_alive_timeout_ms: 300000
+    max_idle_conns: 20
+    cache_name: mem1
+    cache_key_prefix: mockster:8482
+    healthcheck:
+      verb: GET
+      scheme: http
+      host: mockster:8482
+      path: /prometheus/api/v1/query
+      query: query=up
+      expected_codes:
+      - 200
+    timeseries_retention_factor: 1024
+    timeseries_eviction_method: oldest
+    paths:
+      /-0000000101:
+        path: /
+        match_type: prefix
+        handler: proxy
+        methods:
+        - GET
+        - POST
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/-0000000101:
+        path: /api/v1/
+        match_type: prefix
+        handler: proxy
+        methods:
+        - GET
+        - POST
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/admin-1111111111:
+        path: /api/v1/admin
+        match_type: prefix
+        handler: admin
+        methods:
+        - GET
+        - HEAD
+        - POST
+        - PUT
+        - DELETE
+        - CONNECT
+        - OPTIONS
+        - TRACE
+        - PATCH
+        - PURGE
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/alertmanagers-0000000001:
+        path: /api/v1/alertmanagers
+        match_type: exact
+        handler: proxycache
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/alerts-0000000001:
+        path: /api/v1/alerts
+        match_type: exact
+        handler: alerts
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/label/-0000000001:
+        path: /api/v1/label/
+        match_type: prefix
+        handler: labels
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/labels-0000000101:
+        path: /api/v1/labels
+        match_type: exact
+        handler: labels
+        methods:
+        - GET
+        - POST
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/query-0000000101:
+        path: /api/v1/query
+        match_type: exact
+        handler: query
+        methods:
+        - GET
+        - POST
+        cache_key_params:
+        - query
+        - time
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/query_range-0000000101:
+        path: /api/v1/query_range
+        match_type: exact
+        handler: query_range
+        methods:
+        - GET
+        - POST
+        cache_key_params:
+        - query
+        - step
+        response_headers:
+          Cache-Control: s-maxage=21600
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/rules-0000000001:
+        path: /api/v1/rules
+        match_type: exact
+        handler: proxycache
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/series-0000000101:
+        path: /api/v1/series
+        match_type: exact
+        handler: series
+        methods:
+        - GET
+        - POST
+        cache_key_params:
+        - match[]
+        - start
+        - end
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/status-0000000001:
+        path: /api/v1/status
+        match_type: prefix
+        handler: proxycache
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/targets-0000000001:
+        path: /api/v1/targets
+        match_type: exact
+        handler: proxycache
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/targets/metadata-0000000001:
+        path: /api/v1/targets/metadata
+        match_type: exact
+        handler: proxycache
+        methods:
+        - GET
+        cache_key_params:
+        - match_target
+        - metric
+        - limit
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+    negative_cache_name: default
+    timeseries_ttl_ms: 21600000
+    fastforward_ttl_ms: 15000
+    max_ttl_ms: 86400000
+    revalidation_factor: 2
+    max_object_size_bytes: 524288
+    tracing_name: ja1
+    prometheus:
+      instant_round_ms: 15000
+    tls: {}
+    forwarded_headers: standard
+    reqrewriter: []
+  sim2:
+    provider: prometheus
+    origin_url: http://mockster:8482/prometheus
+    timeout_ms: 180000
+    keep_alive_timeout_ms: 300000
+    max_idle_conns: 20
+    cache_name: rds1
+    cache_key_prefix: mockster:8482
+    healthcheck:
+      verb: GET
+      scheme: http
+      host: mockster:8482
+      path: /prometheus/api/v1/query
+      query: query=up
+      expected_codes:
+      - 200
+    timeseries_retention_factor: 1024
+    timeseries_eviction_method: oldest
+    paths:
+      /-0000000101:
+        path: /
+        match_type: prefix
+        handler: proxy
+        methods:
+        - GET
+        - POST
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/-0000000101:
+        path: /api/v1/
+        match_type: prefix
+        handler: proxy
+        methods:
+        - GET
+        - POST
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/admin-1111111111:
+        path: /api/v1/admin
+        match_type: prefix
+        handler: admin
+        methods:
+        - GET
+        - HEAD
+        - POST
+        - PUT
+        - DELETE
+        - CONNECT
+        - OPTIONS
+        - TRACE
+        - PATCH
+        - PURGE
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/alertmanagers-0000000001:
+        path: /api/v1/alertmanagers
+        match_type: exact
+        handler: proxycache
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/alerts-0000000001:
+        path: /api/v1/alerts
+        match_type: exact
+        handler: alerts
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/label/-0000000001:
+        path: /api/v1/label/
+        match_type: prefix
+        handler: labels
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/labels-0000000101:
+        path: /api/v1/labels
+        match_type: exact
+        handler: labels
+        methods:
+        - GET
+        - POST
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/query-0000000101:
+        path: /api/v1/query
+        match_type: exact
+        handler: query
+        methods:
+        - GET
+        - POST
+        cache_key_params:
+        - query
+        - time
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/query_range-0000000101:
+        path: /api/v1/query_range
+        match_type: exact
+        handler: query_range
+        methods:
+        - GET
+        - POST
+        cache_key_params:
+        - query
+        - step
+        response_headers:
+          Cache-Control: s-maxage=21600
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/rules-0000000001:
+        path: /api/v1/rules
+        match_type: exact
+        handler: proxycache
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/series-0000000101:
+        path: /api/v1/series
+        match_type: exact
+        handler: series
+        methods:
+        - GET
+        - POST
+        cache_key_params:
+        - match[]
+        - start
+        - end
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/status-0000000001:
+        path: /api/v1/status
+        match_type: prefix
+        handler: proxycache
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/targets-0000000001:
+        path: /api/v1/targets
+        match_type: exact
+        handler: proxycache
+        methods:
+        - GET
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+      /api/v1/targets/metadata-0000000001:
+        path: /api/v1/targets/metadata
+        match_type: exact
+        handler: proxycache
+        methods:
+        - GET
+        cache_key_params:
+        - match_target
+        - metric
+        - limit
+        response_headers:
+          Cache-Control: s-maxage=30
+        no_metrics: false
+        reqrewriter: []
+    negative_cache_name: default
+    timeseries_ttl_ms: 21600000
+    fastforward_ttl_ms: 15000
+    max_ttl_ms: 86400000
+    revalidation_factor: 2
+    max_object_size_bytes: 524288
+    tracing_name: ja1
+    prometheus:
+      instant_round_ms: 15000
+    tls: {}
+    forwarded_headers: standard
+    reqrewriter: []
+caches:
+  default:
+    provider: memory
+    index:
+      reap_interval_ms: 3000
+      flush_interval_ms: 5000
+      max_size_bytes: 536870912
+      max_size_backoff_bytes: 16777216
+      max_size_backoff_objects: 100
+    redis:
+      client_type: standard
+      protocol: tcp
+      endpoint: redis:6379
+      endpoints:
+      - redis:6379
+    filesystem:
+      cache_path: /tmp/trickster
+    bbolt:
+      filename: trickster.db
+      bucket: trickster
+    badger:
+      directory: /tmp/trickster
+      value_directory: /tmp/trickster
+  fs1:
+    provider: filesystem
+    index:
+      reap_interval_ms: 3000
+      flush_interval_ms: 5000
+      max_size_bytes: 536870912
+      max_size_backoff_bytes: 16777216
+      max_size_objects: 512
+      max_size_backoff_objects: 128
+    redis:
+      client_type: standard
+      protocol: tcp
+      endpoint: redis:6379
+      endpoints:
+      - redis:6379
+    filesystem:
+      cache_path: /data/trickster
+    bbolt:
+      filename: trickster.db
+      bucket: trickster
+    badger:
+      directory: /tmp/trickster
+      value_directory: /tmp/trickster
+  mem1:
+    provider: memory
+    index:
+      reap_interval_ms: 3000
+      flush_interval_ms: 5000
+      max_size_bytes: 536870912
+      max_size_backoff_bytes: 16777216
+      max_size_objects: 512
+      max_size_backoff_objects: 128
+    redis:
+      client_type: standard
+      protocol: tcp
+      endpoint: redis:6379
+      endpoints:
+      - redis:6379
+    filesystem:
+      cache_path: /tmp/trickster
+    bbolt:
+      filename: trickster.db
+      bucket: trickster
+    badger:
+      directory: /tmp/trickster
+      value_directory: /tmp/trickster
+  rds1:
+    provider: redis
+    index:
+      reap_interval_ms: 3000
+      flush_interval_ms: 5000
+      max_size_bytes: 536870912
+      max_size_backoff_bytes: 16777216
+      max_size_backoff_objects: 100
+    redis:
+      client_type: standard
+      protocol: tcp
+      endpoint: redis:6379
+      endpoints:
+      - redis:6379
+    filesystem:
+      cache_path: /tmp/trickster
+    bbolt:
+      filename: trickster.db
+      bucket: trickster
+    badger:
+      directory: /tmp/trickster
+      value_directory: /tmp/trickster
+frontend:
+  listen_port: 8480
+  tls_listen_port: 8483
+logging:
+  log_level: info
+metrics:
+  listen_port: 8481
+tracing:
+  default:
+    provider: none
+    service_name: trickster
+    sample_rate: 1
+    stdout: {}
+    jaeger: {}
+  ja1:
+    provider: jaeger
+    service_name: trickster
+    collector_url: jaeger:6831
+    sample_rate: 1
+    jaeger:
+      endpoint_type: agent
+  jc1:
+    provider: jaeger
+    service_name: trickster
+    collector_url: http://jaeger:14268/api/traces
+    sample_rate: 1
+  std1:
+    provider: stdout
+    service_name: trickster
+    sample_rate: 1
+    stdout:
+      pretty_print: true
+  zip1:
+    provider: zipkin
+    service_name: trickster
+    collector_url: http://zipkin:9411/api/v2/spans
+    sample_rate: 1
+negative_caches:
+  default:
+    "400": 3000
+    "404": 3000
+    "500": 3000
+    "502": 3000
+reloading:
+  listen_address: 127.0.0.1
+  listen_port: 8484
+  handler_path: /trickster/config/reload
+  drain_timeout_ms: 30000
+  rate_limit_ms: 3000
