@@ -69,7 +69,7 @@ func WriteKey(keyPath string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(keyPath), os.FileMode(0755)); err != nil {
 		return err
 	}
-	return ioutil.WriteFile(keyPath, data, os.FileMode(0600))
+	return os.WriteFile(keyPath, data, os.FileMode(0600))
 }
 
 // LoadOrGenerateKeyFile looks for a key in the file at the given path. If it

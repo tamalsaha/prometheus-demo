@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -50,13 +49,13 @@ func ToPrometheusConfig(cfg *rest.Config, ref ServiceReference) (*prometheus.Con
 	certFile := filepath.Join(certDir, "tls.crt")
 	keyFile := filepath.Join(certDir, "tls.key")
 
-	if err := ioutil.WriteFile(caFile, cfg.TLSClientConfig.CAData, 0o644); err != nil {
+	if err := os.WriteFile(caFile, cfg.TLSClientConfig.CAData, 0o644); err != nil {
 		return nil, err
 	}
-	if err := ioutil.WriteFile(certFile, cfg.TLSClientConfig.CertData, 0o644); err != nil {
+	if err := os.WriteFile(certFile, cfg.TLSClientConfig.CertData, 0o644); err != nil {
 		return nil, err
 	}
-	if err := ioutil.WriteFile(keyFile, cfg.TLSClientConfig.KeyData, 0o644); err != nil {
+	if err := os.WriteFile(keyFile, cfg.TLSClientConfig.KeyData, 0o644); err != nil {
 		return nil, err
 	}
 

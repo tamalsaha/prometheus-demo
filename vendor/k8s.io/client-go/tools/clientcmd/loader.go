@@ -286,7 +286,7 @@ func (rules *ClientConfigLoadingRules) Migrate() error {
 			return err
 		}
 		// destination is created with mode 0666 before umask
-		err = ioutil.WriteFile(destination, data, 0666)
+		err = os.WriteFile(destination, data, 0666)
 		if err != nil {
 			return err
 		}
@@ -427,7 +427,7 @@ func WriteToFile(config clientcmdapi.Config, filename string) error {
 		}
 	}
 
-	if err := ioutil.WriteFile(filename, content, 0600); err != nil {
+	if err := os.WriteFile(filename, content, 0600); err != nil {
 		return err
 	}
 	return nil
