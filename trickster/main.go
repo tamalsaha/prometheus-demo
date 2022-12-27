@@ -48,14 +48,20 @@ func NewClient() (client.Client, error) {
 
 func main() {
 	cfg := ctrl.GetConfigOrDie()
-	if _, err := prepConfig(cfg, ServiceReference{
+	pc, err := prepConfig(cfg, ServiceReference{
 		Scheme:    "http",
 		Name:      "kube-prometheus-stack-prometheus",
 		Namespace: "monitoring",
 		Port:      9090,
-	}); err != nil {
+	})
+	if err != nil {
 		panic(err)
 	}
+	data, err := yaml.Marshal(pc)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(string(data))
 }
 
 func useKubebuilderClient() error {
