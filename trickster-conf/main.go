@@ -54,7 +54,7 @@ func NewClient() (client.Client, error) {
 	})
 }
 
-func main__() {
+func main_gen_config() {
 	cfg := ctrl.GetConfigOrDie()
 	pc, err := prepConfig(cfg, ServiceReference{
 		Scheme:    "http",
@@ -74,7 +74,8 @@ func main__() {
 
 func main() {
 	pc, err := promapi.NewClient(promapi.Config{
-		Address: "http://localhost:9090",
+		// Address: "http://localhost:9090",
+		Address: "http://172.104.199.217:9090",
 		Client:  http.DefaultClient,
 	})
 	if err != nil {
