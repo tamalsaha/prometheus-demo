@@ -16,7 +16,7 @@ frontend:
 backends:
   default:
     # update FQDN and Port to work in your environment
-    origin_url: 'https://127.0.0.1:59353/api/v1/namespaces/monitoring/services/http:kube-prometheus-stack-prometheus:9090/proxy/'
+    origin_url: 'https://127.0.0.1:59353/api/v1/namespaces/monitoring/services/http:kube-prometheus-stack-prometheus:9090/proxy'
     provider: 'prometheus'
     tls:
         insecure_skip_verify: false

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -17,7 +18,6 @@ import (
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/tamalsaha/prometheus-demo/prometheus"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/yaml"
 )
 
 var tmpDir = func() string {
@@ -109,7 +109,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to get prometheus cpu query result, reason: %v", err)
 	}
-	data, _ := yaml.Marshal(res)
+	data, _ := json.MarshalIndent(res, "", "  ")
 	fmt.Println(string(data))
 }
 
