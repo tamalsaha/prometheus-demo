@@ -1,0 +1,22 @@
+apiVersion: trickstercache.org/v1alpha1
+kind: Backend
+metadata:
+  name: default
+  namespace: default
+  labels:
+    trickstercache.org/name: tricky
+spec:
+  # update FQDN and Port to work in your environment
+  origin_url: 'https://127.0.0.1:59353/api/v1/namespaces/monitoring/services/http:kube-prometheus-stack-prometheus:9090/proxy'
+  provider: 'prometheus'
+  tls:
+    insecure_skip_verify: false
+    certificate_authority_paths:
+    -  /Users/tamal/go/src/github.com/tamalsaha/prometheus-demo/certs/ca.crt
+    client_cert_path: /Users/tamal/go/src/github.com/tamalsaha/prometheus-demo/certs/tls.crt
+    client_key_path: /Users/tamal/go/src/github.com/tamalsaha/prometheus-demo/certs/tls.key
+  # secret:
+  #   name: mysecret
+  #   items:
+  #     - key: username
+  #       path: my-group/my-username
