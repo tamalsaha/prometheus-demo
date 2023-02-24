@@ -48,7 +48,6 @@ type Flags struct {
 }
 
 func parseFlags(applicationName string, arguments []string) (*Flags, error) {
-
 	flags := &Flags{}
 	flagSet := flag.NewFlagSet("trickster", flag.ContinueOnError)
 

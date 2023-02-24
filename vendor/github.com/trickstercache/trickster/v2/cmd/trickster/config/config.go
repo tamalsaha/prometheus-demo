@@ -34,75 +34,78 @@ import (
 	lo "github.com/trickstercache/trickster/v2/pkg/observability/logging/options"
 	mo "github.com/trickstercache/trickster/v2/pkg/observability/metrics/options"
 	tracing "github.com/trickstercache/trickster/v2/pkg/observability/tracing/options"
+	no "github.com/trickstercache/trickster/v2/pkg/proxy/nats/options"
 	rewriter "github.com/trickstercache/trickster/v2/pkg/proxy/request/rewriter"
 	rwopts "github.com/trickstercache/trickster/v2/pkg/proxy/request/rewriter/options"
 	"github.com/trickstercache/trickster/v2/pkg/util/yamlx"
 
-	"gopkg.in/yaml.v2"
+	"sigs.k8s.io/yaml"
 )
 
 // Config is the main configuration object
 type Config struct {
 	// Main is the primary MainConfig section
-	Main *MainConfig `yaml:"main,omitempty"`
+	Main *MainConfig `json:"main,omitempty"`
+	// Nats is provides for transport via NATS.io
+	Nats *no.Options `json:"nats,omitempty"`
 	// Backends is a map of BackendOptionss
-	Backends map[string]*bo.Options `yaml:"backends,omitempty"`
+	Backends map[string]*bo.Options `json:"backends,omitempty"`
 	// Caches is a map of CacheConfigs
-	Caches map[string]*cache.Options `yaml:"caches,omitempty"`
+	Caches map[string]*cache.Options `json:"caches,omitempty"`
 	// ProxyServer is provides configurations about the Proxy Front End
-	Frontend *fropt.Options `yaml:"frontend,omitempty"`
+	Frontend *fropt.Options `json:"frontend,omitempty"`
 	// Logging provides configurations that affect logging behavior
-	Logging *lo.Options `yaml:"logging,omitempty"`
+	Logging *lo.Options `json:"logging,omitempty"`
 	// Metrics provides configurations for collecting Metrics about the application
-	Metrics *mo.Options `yaml:"metrics,omitempty"`
+	Metrics *mo.Options `json:"metrics,omitempty"`
 	// TracingConfigs provides the distributed tracing configuration
-	TracingConfigs map[string]*tracing.Options `yaml:"tracing,omitempty"`
+	TracingConfigs map[string]*tracing.Options `json:"tracing,omitempty"`
 	// NegativeCacheConfigs is a map of NegativeCacheConfigs
-	NegativeCacheConfigs map[string]negative.Config `yaml:"negative_caches,omitempty"`
+	NegativeCacheConfigs map[string]negative.Config `json:"negative_caches,omitempty"`
 	// Rules is a map of the Rules
-	Rules map[string]*rule.Options `yaml:"rules,omitempty"`
+	Rules map[string]*rule.Options `json:"rules,omitempty"`
 	// RequestRewriters is a map of the Rewriters
-	RequestRewriters map[string]*rwopts.Options `yaml:"request_rewriters,omitempty"`
+	RequestRewriters map[string]*rwopts.Options `json:"request_rewriters,omitempty"`
 	// ReloadConfig provides configurations for in-process config reloading
-	ReloadConfig *reload.Options `yaml:"reloading,omitempty"`
+	ReloadConfig *reload.Options `json:"reloading,omitempty"`
 
 	// Resources holds runtime resources uses by the Config
-	Resources *Resources `yaml:"-"`
+	Resources *Resources `json:"-"`
 
-	CompiledRewriters map[string]rewriter.RewriteInstructions `yaml:"-"`
+	CompiledRewriters map[string]rewriter.RewriteInstructions `json:"-"`
 	activeCaches      map[string]interface{}
 	providedOriginURL string
 	providedProvider  string
 
-	LoaderWarnings []string `yaml:"-"`
+	LoaderWarnings []string `json:"-"`
 }
 
 // MainConfig is a collection of general configuration values.
 type MainConfig struct {
 	// InstanceID represents a unique ID for the current instance, when multiple instances on the same host
-	InstanceID int `yaml:"instance_id,omitempty"`
+	InstanceID int `json:"instance_id,omitempty"`
 	// ConfigHandlerPath provides the path to register the Config Handler for outputting the running configuration
-	ConfigHandlerPath string `yaml:"config_handler_path,omitempty"`
+	ConfigHandlerPath string `json:"config_handler_path,omitempty"`
 	// PingHandlerPath provides the path to register the Ping Handler for checking that Trickster is running
-	PingHandlerPath string `yaml:"ping_handler_path,omitempty"`
+	PingHandlerPath string `json:"ping_handler_path,omitempty"`
 	// ReloadHandlerPath provides the path to register the Config Reload Handler
-	ReloadHandlerPath string `yaml:"reload_handler_path,omitempty"`
+	ReloadHandlerPath string `json:"reload_handler_path,omitempty"`
 	// HeatlHandlerPath provides the base Health Check Handler path
-	HealthHandlerPath string `yaml:"health_handler_path,omitempty"`
+	HealthHandlerPath string `json:"health_handler_path,omitempty"`
 	// PprofServer provides the name of the http listener that will host the pprof debugging routes
 	// Options are: "metrics", "reload", "both", or "off"; default is both
-	PprofServer string `yaml:"pprof_server,omitempty"`
+	PprofServer string `json:"pprof_server,omitempty"`
 	// ServerName represents the server name that is conveyed in Via headers to upstream origins
 	// defaults to os.Hostname
-	ServerName string `yaml:"server_name,omitempty"`
+	ServerName string `json:"server_name,omitempty"`
 
 	// ReloaderLock is used to lock the config for reloading
-	ReloaderLock sync.Mutex `yaml:"-"`
+	ReloaderLock sync.Mutex `json:"-"`
 
-	configFilePath      string
-	configLastModified  time.Time
-	configRateLimitTime time.Time
-	stalenessCheckLock  sync.Mutex
+	configFilePath      string     `json:"-"`
+	configLastModified  time.Time  `json:"-"`
+	configRateLimitTime time.Time  `json:"-"`
+	stalenessCheckLock  sync.Mutex `json:"-"`
 }
 
 func (mc *MainConfig) SetStalenessInfo(fp string, lm, rlt time.Time) {
@@ -111,9 +114,35 @@ func (mc *MainConfig) SetStalenessInfo(fp string, lm, rlt time.Time) {
 	mc.configRateLimitTime = rlt
 }
 
+// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
+func (in *MainConfig) DeepCopyInto(out *MainConfig) {
+	out.InstanceID = in.InstanceID
+	out.ConfigHandlerPath = in.ConfigHandlerPath
+	out.PingHandlerPath = in.PingHandlerPath
+	out.ReloadHandlerPath = in.ReloadHandlerPath
+	out.HealthHandlerPath = in.HealthHandlerPath
+	out.PprofServer = in.PprofServer
+	out.ServerName = in.ServerName
+	// out.ReloaderLock        = in.ReloaderLock
+	out.configFilePath = in.configFilePath
+	out.configLastModified = in.configLastModified
+	out.configRateLimitTime = in.configRateLimitTime
+	// out.stalenessCheckLock  = in.stalenessCheckLock
+}
+
+// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new Options.
+func (in *MainConfig) DeepCopy() *MainConfig {
+	if in == nil {
+		return nil
+	}
+	out := new(MainConfig)
+	in.DeepCopyInto(out)
+	return out
+}
+
 // Resources is a collection of values used by configs at runtime that are not part of the config itself
 type Resources struct {
-	QuitChan chan bool `yaml:"-"`
+	QuitChan chan bool `json:"-"`
 	metadata yamlx.KeyLookup
 }
 
@@ -156,7 +185,7 @@ func NewConfig() *Config {
 func (c *Config) loadFile(flags *Flags) error {
 	b, err := os.ReadFile(flags.ConfigPath)
 	if err != nil {
-		c.setDefaults(yamlx.KeyLookup{})
+		c.SetDefaults(yamlx.KeyLookup{})
 		return err
 	}
 	return c.loadYAMLConfig(string(b), flags)
@@ -164,17 +193,16 @@ func (c *Config) loadFile(flags *Flags) error {
 
 // loadYAMLConfig loads application configuration from a YAML-formatted byte slice.
 func (c *Config) loadYAMLConfig(yml string, flags *Flags) error {
-
 	err := yaml.Unmarshal([]byte(yml), &c)
 	if err != nil {
 		return err
 	}
 	md, err := yamlx.GetKeyList(yml)
 	if err != nil {
-		c.setDefaults(yamlx.KeyLookup{})
+		c.SetDefaults(yamlx.KeyLookup{})
 		return err
 	}
-	err = c.setDefaults(md)
+	err = c.SetDefaults(md)
 	if err == nil {
 		c.Main.configFilePath = flags.ConfigPath
 		c.Main.configLastModified = c.CheckFileLastModified()
@@ -194,8 +222,7 @@ func (c *Config) CheckFileLastModified() time.Time {
 	return file.ModTime()
 }
 
-func (c *Config) setDefaults(metadata yamlx.KeyLookup) error {
-
+func (c *Config) SetDefaults(metadata yamlx.KeyLookup) error {
 	c.Resources.metadata = metadata
 
 	var err error
@@ -263,7 +290,6 @@ func (c *Config) processPprofConfig() error {
 
 // Clone returns an exact copy of the subject *Config
 func (c *Config) Clone() *Config {
-
 	nc := NewConfig()
 	delete(nc.Caches, "default")
 	delete(nc.Backends, "default")
@@ -330,7 +356,6 @@ func (c *Config) Clone() *Config {
 
 // IsStale returns true if the running config is stale versus the
 func (c *Config) IsStale() bool {
-
 	c.Main.stalenessCheckLock.Lock()
 	defer c.Main.stalenessCheckLock.Unlock()
 
@@ -343,8 +368,7 @@ func (c *Config) IsStale() bool {
 		c.ReloadConfig = reload.New()
 	}
 
-	c.Main.configRateLimitTime =
-		time.Now().Add(time.Millisecond * time.Duration(c.ReloadConfig.RateLimitMS))
+	c.Main.configRateLimitTime = time.Now().Add(time.Millisecond * time.Duration(c.ReloadConfig.RateLimitMS))
 	t := c.CheckFileLastModified()
 	if t.IsZero() {
 		return false
@@ -372,7 +396,6 @@ func (c *Config) String() string {
 	}
 
 	return ""
-
 }
 
 // ConfigFilePath returns the file path from which this configuration is based

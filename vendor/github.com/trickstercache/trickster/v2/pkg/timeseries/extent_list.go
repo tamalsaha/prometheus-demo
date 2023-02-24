@@ -77,8 +77,8 @@ func (el ExtentList) OutsideOf(e Extent) bool {
 
 // Crop reduces the ExtentList to the boundaries defined by the provided Extent
 func (el ExtentList) Crop(e Extent) ExtentList {
-	var startIndex = -1
-	var endIndex = -1
+	startIndex := -1
+	endIndex := -1
 	for i, f := range el {
 		if startIndex == -1 {
 			if f.Includes(e.Start) {
@@ -474,7 +474,7 @@ func (el ExtentList) CalculateDeltas(want Extent, step time.Duration) ExtentList
 	}
 	// Find the fill and gap ranges
 	ins := ExtentList{}
-	var inStart = time.Time{}
+	inStart := time.Time{}
 	l := len(misses)
 	for i := range misses {
 		if inStart.IsZero() {
@@ -536,7 +536,6 @@ func (el ExtentListLRU) String() string {
 // UpdateLastUsed updates the ExtentListLRU's LastUsed field for the provided extent.
 // The step is required in order to properly split extents.
 func (el ExtentListLRU) UpdateLastUsed(lur Extent, step time.Duration) ExtentListLRU {
-
 	if el == nil {
 		return nil
 	}

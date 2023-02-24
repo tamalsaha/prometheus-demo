@@ -6,17 +6,14 @@ import (
 	"fmt"
 	promapi "github.com/prometheus/client_golang/api"
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
-	"log"
-	"net/http"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
-
 	prom_config "github.com/prometheus/common/config"
 	"github.com/tamalsaha/prometheus-demo/prometheus"
 	"github.com/trickstercache/trickster/v2/cmd/trickster/config"
+	bo "github.com/trickstercache/trickster/v2/pkg/backends/options"
+	fropt "github.com/trickstercache/trickster/v2/pkg/frontend/options"
+	lo "github.com/trickstercache/trickster/v2/pkg/observability/logging/options"
+	mo "github.com/trickstercache/trickster/v2/pkg/observability/metrics/options"
+	to "github.com/trickstercache/trickster/v2/pkg/proxy/tls/options"
 	core "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -24,10 +21,17 @@ import (
 	"k8s.io/klog/v2/klogr"
 	kmapi "kmodules.xyz/client-go/api/v1"
 	au "kmodules.xyz/client-go/client/apiutil"
+	"log"
+	"net/http"
+	"os"
+	"path/filepath"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/yaml"
+	"strconv"
+	"strings"
+	"time"
 )
 
 func NewClient() (client.Client, error) {
@@ -54,7 +58,7 @@ func NewClient() (client.Client, error) {
 	})
 }
 
-func main_gen_config() {
+func main() {
 	cfg := ctrl.GetConfigOrDie()
 	pc, err := prepConfig(cfg, ServiceReference{
 		Scheme:    "http",
@@ -65,18 +69,61 @@ func main_gen_config() {
 	if err != nil {
 		panic(err)
 	}
-	data, err := yaml.Marshal(pc)
+	//data, err := yaml.Marshal(pc)
+	//if err != nil {
+	//	panic(err)
+	//}
+	//fmt.Println(string(data))
+
+	pwd, err := os.Getwd()
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(string(data))
+
+	cfg2 := config.Config{
+		Frontend: &fropt.Options{
+			ListenPort: 9090,
+		},
+		Backends: map[string]*bo.Options{
+			"default": &bo.Options{
+				Provider:  "prometheus",
+				OriginURL: pc.Addr,
+				TLS: &to.Options{
+					ServeTLS:           false,
+					InsecureSkipVerify: false,
+					CertificateAuthorityPaths: []string{
+						filepath.Join(pwd, "certs", "ca.crt"),
+					},
+					ClientCertPath: filepath.Join(pwd, "certs", "tls.crt"),
+					ClientKeyPath:  filepath.Join(pwd, "certs", "tls.key"),
+				},
+			},
+		},
+		Metrics: &mo.Options{
+			ListenPort: 8481,
+		},
+		Logging: &lo.Options{
+			LogLevel: "info",
+		},
+	}
+
+	data, err := yaml.Marshal(cfg2)
+	if err != nil {
+		panic(err)
+	}
+
+	// /Users/tamal/go/src/github.com/tamalsaha/prometheus-demo/trickster-conf
+	err = os.WriteFile("trickster-conf/config.yaml", data, 0644)
+	if err != nil {
+		panic(err)
+	}
 }
 
-func main() {
+func main__() {
 	pc, err := promapi.NewClient(promapi.Config{
-		// Address: "http://localhost:9090",
-		Address: "http://172.104.199.217:9090",
-		Client:  http.DefaultClient,
+		Address: "http://127.0.0.1:9090/1-a374b4a1-04e2-4164-b268-4f4799f697ed",
+		// Address: "http://172.104.199.217:9090",
+		Client: http.DefaultClient,
 	})
 	if err != nil {
 		panic(err)

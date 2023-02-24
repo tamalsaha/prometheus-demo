@@ -280,8 +280,10 @@ func (hop *Hop) normalizeAddresses() {
 	hop.Server = normalizeAddress(hop.Server)
 }
 
-const v6LB = `["`
-const v6RB = `"]`
+const (
+	v6LB = `["`
+	v6RB = `"]`
+)
 
 func normalizeAddress(input string) string {
 	input = strings.TrimPrefix(input, v6LB)

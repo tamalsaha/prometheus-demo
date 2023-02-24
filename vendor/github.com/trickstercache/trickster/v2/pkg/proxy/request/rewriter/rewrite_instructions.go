@@ -85,8 +85,10 @@ var dicts = map[string]dictFunc{
 	},
 }
 
-type scalarGetFunc func(*http.Request) string
-type scalarSetFunc func(*http.Request, string)
+type (
+	scalarGetFunc func(*http.Request) string
+	scalarSetFunc func(*http.Request, string)
+)
 
 var scalarGets = map[string]scalarGetFunc{
 	"params": func(r *http.Request) string {
@@ -256,7 +258,6 @@ func (ri *rwiKeyBasedAppender) Parse(parts []string) error {
 type mappable map[string][]string
 
 func (ri *rwiKeyBasedAppender) Execute(r *http.Request) {
-
 	dict := ri.dict(r)
 	var m mappable
 	var ok bool
@@ -329,7 +330,6 @@ func (ri *rwiKeyBasedAppender) Execute(r *http.Request) {
 	}
 
 	h.Set(ri.key, strings.Join(parts, ", "))
-
 }
 
 func (ri *rwiKeyBasedAppender) HasTokens() bool {
@@ -364,7 +364,6 @@ func (ri *rwiKeyBasedReplacer) Parse(parts []string) error {
 }
 
 func (ri *rwiKeyBasedReplacer) Execute(r *http.Request) {
-
 	if ri.depth == 0 {
 		ri.depth = -1
 	}
@@ -434,7 +433,6 @@ func (ri *rwiKeyBasedDeleter) Parse(parts []string) error {
 }
 
 func (ri *rwiKeyBasedDeleter) Execute(r *http.Request) {
-
 	dict := ri.dict(r)
 
 	if ri.value == "" {
@@ -477,7 +475,6 @@ func (ri *rwiKeyBasedDeleter) Execute(r *http.Request) {
 		parts = append(parts[:found], parts[found+1:]...)
 		dict.Set(ri.key, strings.Join(parts, ", "))
 	}
-
 }
 
 func (ri *rwiKeyBasedDeleter) HasTokens() bool {
@@ -627,7 +624,6 @@ func (ri *rwiBasicReplacer) String() string {
 }
 
 func (ri *rwiBasicReplacer) Parse(parts []string) error {
-
 	lp := len(parts)
 	if lp != 4 && lp != 5 {
 		return errBadParams
@@ -664,8 +660,7 @@ func (ri *rwiBasicReplacer) HasTokens() bool {
 	return ri.hasTokens
 }
 
-type rwiPortDeleter struct {
-}
+type rwiPortDeleter struct{}
 
 func (ri *rwiPortDeleter) String() string {
 	return `{"type":"portDeleter"}`

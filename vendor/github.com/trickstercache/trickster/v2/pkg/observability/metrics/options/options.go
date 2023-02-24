@@ -19,9 +19,9 @@ package options
 // Options is a collection of Metrics Collection configurations
 type Options struct {
 	// ListenAddress is IP address from which the Application Metrics are available for pulling at /metrics
-	ListenAddress string `yaml:"listen_address,omitempty"`
+	ListenAddress string `json:"listen_address,omitempty"`
 	// ListenPort is TCP Port from which the Application Metrics are available for pulling at /metrics
-	ListenPort int `yaml:"listen_port,omitempty"`
+	ListenPort int `json:"listen_port,omitempty"`
 }
 
 // New returns a new Options with default values

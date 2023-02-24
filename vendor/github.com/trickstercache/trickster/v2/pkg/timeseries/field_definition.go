@@ -81,5 +81,4 @@ func (fds FieldDefinitions) String() string {
 		s[i] = fd.String()
 	}
 	return "[" + strings.Join(s, ", ") + "]"
-
 }

@@ -65,7 +65,6 @@ func MakeResultsHeader(engine, status, ffstatus string, fetched timeseries.Exten
 
 // MergeResultHeaderVals merges 2 Trickster Result Headers
 func MergeResultHeaderVals(h1, h2 string) string {
-
 	if h1 == "" {
 		return h2
 	}
@@ -99,11 +98,9 @@ func MergeResultHeaderVals(h1, h2 string) string {
 	}
 
 	return r1.String()
-
 }
 
 func parseResultHeaderVals(h string) ResultHeaderParts {
-
 	r := ResultHeaderParts{}
 	parts := strings.Split(h, "; ")
 	for _, part := range parts {
@@ -152,5 +149,4 @@ func parseResultHeaderVals(h string) ResultHeaderParts {
 	}
 
 	return r
-
 }

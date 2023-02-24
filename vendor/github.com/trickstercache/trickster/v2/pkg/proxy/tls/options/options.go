@@ -27,22 +27,22 @@ import (
 type Options struct {
 	// FullChainCertPath specifies the path of the file containing the
 	// concatenated server certification and the intermediate certification for the tls endpoint
-	FullChainCertPath string `yaml:"full_chain_cert_path,omitempty"`
+	FullChainCertPath string `json:"full_chain_cert_path,omitempty"`
 	// PrivateKeyPath specifies the path of the private key file for the tls endpoint
-	PrivateKeyPath string `yaml:"private_key_path,omitempty"`
+	PrivateKeyPath string `json:"private_key_path,omitempty"`
 	// ServeTLS is set to true once the Cert and Key files have been validated,
 	// indicating the consumer of this config can service requests over TLS
-	ServeTLS bool `yaml:"-"`
+	ServeTLS bool `json:"-"`
 	// InsecureSkipVerify indicates that the HTTPS Client in Trickster should bypass
 	// hostname verification for the origin's certificate when proxying requests
-	InsecureSkipVerify bool `yaml:"insecure_skip_verify,omitempty"`
+	InsecureSkipVerify bool `json:"insecure_skip_verify,omitempty"`
 	// CertificateAuthorities provides a list of custom Certificate Authorities for the upstream origin
 	// which are considered in addition to any system CA's by the Trickster HTTPS Client
-	CertificateAuthorityPaths []string `yaml:"certificate_authority_paths,omitempty"`
+	CertificateAuthorityPaths []string `json:"certificate_authority_paths,omitempty"`
 	// ClientCertPath provides the path to the Client Certificate when using Mutual Authorization
-	ClientCertPath string `yaml:"client_cert_path,omitempty"`
+	ClientCertPath string `json:"client_cert_path,omitempty"`
 	// ClientKeyPath provides the path to the Client Key when using Mutual Authorization
-	ClientKeyPath string `yaml:"client_key_path,omitempty"`
+	ClientKeyPath string `json:"client_key_path,omitempty"`
 }
 
 // New will return a *Options with the default settings
@@ -78,32 +78,50 @@ func (o *Options) Equal(o2 *Options) bool {
 
 // Validate returns true if the TLS Options are validated
 func (o *Options) Validate() (bool, error) {
-
 	if (o.FullChainCertPath == "" || o.PrivateKeyPath == "") &&
 		(o.CertificateAuthorityPaths == nil || len(o.CertificateAuthorityPaths) == 0) {
 		return false, nil
 	}
 
-	_, err := os.ReadFile(o.FullChainCertPath)
-	if err != nil {
-		return false, err
+	if o.FullChainCertPath != "" {
+		_, err := os.ReadFile(o.FullChainCertPath)
+		if err != nil {
+			return false, err
+		}
 	}
-	_, err = os.ReadFile(o.PrivateKeyPath)
-	if err != nil {
-		return false, err
+
+	if o.PrivateKeyPath != "" {
+		_, err := os.ReadFile(o.PrivateKeyPath)
+		if err != nil {
+			return false, err
+		}
 	}
 
 	// Verify CA Paths
 	if o.CertificateAuthorityPaths != nil && len(o.CertificateAuthorityPaths) > 0 {
 		for _, path := range o.CertificateAuthorityPaths {
-			_, err = os.ReadFile(path)
+			_, err := os.ReadFile(path)
 			if err != nil {
 				return false, err
 			}
 		}
 	}
 
-	o.ServeTLS = true
+	if o.ClientCertPath != "" {
+		_, err := os.ReadFile(o.ClientCertPath)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	if o.ClientKeyPath != "" {
+		_, err := os.ReadFile(o.ClientKeyPath)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	o.ServeTLS = o.FullChainCertPath != "" && o.PrivateKeyPath != ""
 
 	return true, nil
 }

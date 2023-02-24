@@ -19,9 +19,9 @@ package options
 // Options is a collection of Configurations for storing cached data on the Filesystem
 type Options struct {
 	// Filename represents the filename (including path) of the BotlDB database
-	Filename string `yaml:"filename,omitempty"`
+	Filename string `json:"filename,omitempty"`
 	// Bucket represents the name of the bucket within BBolt under which Trickster's keys will be stored.
-	Bucket string `yaml:"bucket,omitempty"`
+	Bucket string `json:"bucket,omitempty"`
 }
 
 // New returns a reference to a new bbolt Options

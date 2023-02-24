@@ -27,13 +27,12 @@ type KeyLookup map[string]interface{}
 // GetKeyList parses a YAML-formatted file and returns its list of fully-qualified key names.
 // This assumes the yml blob has already been linted and is strictly valid
 func GetKeyList(yml string) (KeyLookup, error) {
-
 	lines := strings.Split(yml, "\n")
 	keys := make(map[string]interface{})
 
 	var lk depthLookup
 	var depths []int
-	var baseDepth = -1
+	baseDepth := -1
 
 	for _, line := range lines {
 		if line == "" {
@@ -107,7 +106,6 @@ func getDepthData(depth int, dl depthLookup) (depthData, error) {
 var errEmptyDepthList = errors.New("empty depth list")
 
 func getParentDepthData(depth int, l []int, dl depthLookup) (depthData, error) {
-
 	if len(l) == 0 {
 		return depthData{}, errEmptyDepthList
 	}

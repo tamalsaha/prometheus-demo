@@ -18,7 +18,7 @@ package options
 
 // Options is a collection of Stdout-specific options
 type Options struct {
-	PrettyPrint bool `yaml:"pretty_print,omitempty"`
+	PrettyPrint bool `json:"pretty_print,omitempty"`
 }
 
 // Clone returns a perfect copy of the subject *Options

@@ -1,3 +1,6 @@
+# github.com/PuerkitoBio/purell v1.2.0
+## explicit; go 1.19
+github.com/PuerkitoBio/purell
 # github.com/beorn7/perks v1.0.1
 ## explicit; go 1.11
 github.com/beorn7/perks/quantile
@@ -27,7 +30,7 @@ github.com/go-openapi/jsonpointer
 ## explicit; go 1.13
 github.com/go-openapi/jsonreference
 github.com/go-openapi/jsonreference/internal
-# github.com/go-openapi/swag v0.19.14
+# github.com/go-openapi/swag v0.19.15
 ## explicit; go 1.11
 github.com/go-openapi/swag
 # github.com/gogo/protobuf v1.3.2
@@ -140,7 +143,7 @@ github.com/spf13/pflag
 # github.com/tinylib/msgp v1.1.6
 ## explicit; go 1.14
 github.com/tinylib/msgp/msgp
-# github.com/trickstercache/trickster/v2 v2.0.0-beta2.0.20221215202956-2eeb4ba048ed
+# github.com/trickstercache/trickster/v2 v2.0.0-beta2.0.20221215202956-2eeb4ba048ed => github.com/open-viz/trickster/v2 v2.0.0-beta3.0.20230114115456-4cc1f84650ca
 ## explicit; go 1.19
 github.com/trickstercache/trickster/v2/cmd/trickster/config
 github.com/trickstercache/trickster/v2/cmd/trickster/config/reload/options
@@ -171,6 +174,7 @@ github.com/trickstercache/trickster/v2/pkg/proxy/context
 github.com/trickstercache/trickster/v2/pkg/proxy/forwarding
 github.com/trickstercache/trickster/v2/pkg/proxy/headers
 github.com/trickstercache/trickster/v2/pkg/proxy/methods
+github.com/trickstercache/trickster/v2/pkg/proxy/nats/options
 github.com/trickstercache/trickster/v2/pkg/proxy/paths/matching
 github.com/trickstercache/trickster/v2/pkg/proxy/paths/options
 github.com/trickstercache/trickster/v2/pkg/proxy/request/rewriter
@@ -182,11 +186,11 @@ github.com/trickstercache/trickster/v2/pkg/timeseries
 github.com/trickstercache/trickster/v2/pkg/util/copiers
 github.com/trickstercache/trickster/v2/pkg/util/strings
 github.com/trickstercache/trickster/v2/pkg/util/yamlx
-# go.bytebuilders.dev/license-verifier v0.12.1
+# go.bytebuilders.dev/license-verifier v0.12.2
 ## explicit; go 1.18
 go.bytebuilders.dev/license-verifier/apis/licenses
 go.bytebuilders.dev/license-verifier/info
-# golang.org/x/net v0.3.1-0.20221206200815-1e63c2f08a10
+# golang.org/x/net v0.5.0
 ## explicit; go 1.17
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
@@ -201,21 +205,22 @@ golang.org/x/net/trace
 golang.org/x/oauth2
 golang.org/x/oauth2/clientcredentials
 golang.org/x/oauth2/internal
-# golang.org/x/sys v0.3.0
+# golang.org/x/sys v0.4.0
 ## explicit; go 1.17
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/plan9
 golang.org/x/sys/unix
 golang.org/x/sys/windows
-# golang.org/x/term v0.3.0
+# golang.org/x/term v0.4.0
 ## explicit; go 1.17
 golang.org/x/term
-# golang.org/x/text v0.5.0
+# golang.org/x/text v0.6.0
 ## explicit; go 1.17
 golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
+golang.org/x/text/width
 # golang.org/x/time v0.3.0
 ## explicit
 golang.org/x/time/rate
@@ -611,3 +616,4 @@ sigs.k8s.io/structured-merge-diff/v4/value
 # sigs.k8s.io/yaml v1.3.0
 ## explicit; go 1.12
 sigs.k8s.io/yaml
+# github.com/trickstercache/trickster/v2 => github.com/open-viz/trickster/v2 v2.0.0-beta3.0.20230114115456-4cc1f84650ca

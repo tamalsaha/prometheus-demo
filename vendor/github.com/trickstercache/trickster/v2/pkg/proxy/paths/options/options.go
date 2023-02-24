@@ -35,58 +35,58 @@ import (
 // Options defines a URL Path that is associated with an HTTP Handler
 type Options struct {
 	// Path indicates the HTTP Request's URL PATH to which this configuration applies
-	Path string `yaml:"path,omitempty"`
+	Path string `json:"path,omitempty"`
 	// MatchTypeName indicates the type of path match the router will apply to the path ('exact' or 'prefix')
-	MatchTypeName string `yaml:"match_type,omitempty"`
+	MatchTypeName string `json:"match_type,omitempty"`
 	// HandlerName provides the name of the HTTP handler to use
-	HandlerName string `yaml:"handler,omitempty"`
+	HandlerName string `json:"handler,omitempty"`
 	// Methods provides the list of permitted HTTP request methods for this Path
-	Methods []string `yaml:"methods,omitempty"`
+	Methods []string `json:"methods,omitempty"`
 	// CacheKeyParams provides the list of http request query parameters to be included
 	//  in the hash for each request's cache key
-	CacheKeyParams []string `yaml:"cache_key_params,omitempty"`
+	CacheKeyParams []string `json:"cache_key_params,omitempty"`
 	// CacheKeyHeaders provides the list of http request headers to be included in the hash for each request's cache key
-	CacheKeyHeaders []string `yaml:"cache_key_headers,omitempty"`
+	CacheKeyHeaders []string `json:"cache_key_headers,omitempty"`
 	// CacheKeyFormFields provides the list of http request body fields to be included
 	// in the hash for each request's cache key
-	CacheKeyFormFields []string `yaml:"cache_key_form_fields,omitempty"`
+	CacheKeyFormFields []string `json:"cache_key_form_fields,omitempty"`
 	// RequestHeaders is a map of headers that will be added to requests to the upstream Origin for this path
-	RequestHeaders map[string]string `yaml:"request_headers,omitempty"`
+	RequestHeaders map[string]string `json:"request_headers,omitempty"`
 	// RequestParams is a map of headers that will be added to requests to the upstream Origin for this path
-	RequestParams map[string]string `yaml:"request_params,omitempty"`
+	RequestParams map[string]string `json:"request_params,omitempty"`
 	// ResponseHeaders is a map of http headers that will be added to responses to the downstream client
-	ResponseHeaders map[string]string `yaml:"response_headers,omitempty"`
+	ResponseHeaders map[string]string `json:"response_headers,omitempty"`
 	// ResponseCode sets a custom response code to be sent to downstream clients for this path.
-	ResponseCode int `yaml:"response_code,omitempty"`
+	ResponseCode int `json:"response_code,omitempty"`
 	// ResponseBody sets a custom response body to be sent to the donstream client for this path.
-	ResponseBody string `yaml:"response_body,omitempty"`
+	ResponseBody string `json:"response_body,omitempty"`
 	// CollapsedForwardingName indicates 'basic' or 'progressive' Collapsed Forwarding to be used by this path.
-	CollapsedForwardingName string `yaml:"collapsed_forwarding,omitempty"`
+	CollapsedForwardingName string `json:"collapsed_forwarding,omitempty"`
 	// ReqRewriterName is the name of a configured Rewriter that will modify the request prior to
 	// processing by the backend client
-	ReqRewriterName string `yaml:"req_rewriter_name,omitempty"`
+	ReqRewriterName string `json:"req_rewriter_name,omitempty"`
 	// NoMetrics, when set to true, disables metrics decoration for the path
-	NoMetrics bool `yaml:"no_metrics"`
+	NoMetrics bool `json:"no_metrics"`
 
 	// Handler is the HTTP Handler represented by the Path's HandlerName
-	Handler http.Handler `yaml:"-"`
+	Handler http.Handler `json:"-"`
 	// ResponseBodyBytes provides a byte slice version of the ResponseBody value
-	ResponseBodyBytes []byte `yaml:"-"`
+	ResponseBodyBytes []byte `json:"-"`
 	// MatchType is the PathMatchType representation of MatchTypeName
-	MatchType matching.PathMatchType `yaml:"-"`
+	MatchType matching.PathMatchType `json:"-"`
 	// CollapsedForwardingType is the typed representation of CollapsedForwardingName
-	CollapsedForwardingType forwarding.CollapsedForwardingType `yaml:"-"`
+	CollapsedForwardingType forwarding.CollapsedForwardingType `json:"-"`
 	// KeyHasher points to an optional function that hashes the cacheKey with a custom algorithm
 	// NOTE: This is used by some backends like IronDB, but is not configurable by end users.
-	KeyHasher key.HasherFunc `yaml:"-"`
+	KeyHasher key.HasherFunc `json:"-"`
 	// Custom is a compiled list of any custom settings for this path from the config file
-	Custom []string `yaml:"-"`
+	Custom []string `json:"-"`
 	// ReqRewriter is the rewriter handler as indicated by RuleName
-	ReqRewriter rewriter.RewriteInstructions
+	ReqRewriter rewriter.RewriteInstructions `json:"-"`
 
 	// HasCustomResponseBody is a boolean indicating if the response body is custom
 	// this flag allows an empty string response to be configured as a return value
-	HasCustomResponseBody bool `yaml:"-"`
+	HasCustomResponseBody bool `json:"-"`
 }
 
 // Lookup is a map of Options
@@ -192,7 +192,8 @@ func (o *Options) Merge(o2 *Options) {
 	o.Custom = strutil.Unique(o.Custom)
 }
 
-var pathMembers = []string{"path", "match_type", "handler", "methods", "cache_key_params",
+var pathMembers = []string{
+	"path", "match_type", "handler", "methods", "cache_key_params",
 	"cache_key_headers", "default_ttl_ms", "request_headers", "response_headers",
 	"response_headers", "response_code", "response_body", "no_metrics", "collapsed_forwarding",
 	"req_rewriter_name",
@@ -236,8 +237,7 @@ func SetDefaults(
 			if _, ok := forwarding.CollapsedForwardingTypeNames[p.CollapsedForwardingName]; !ok {
 				return fmt.Errorf("invalid collapsed_forwarding name: %s", p.CollapsedForwardingName)
 			}
-			p.CollapsedForwardingType =
-				forwarding.GetCollapsedForwardingType(p.CollapsedForwardingName)
+			p.CollapsedForwardingType = forwarding.GetCollapsedForwardingType(p.CollapsedForwardingName)
 		} else {
 			p.CollapsedForwardingType = forwarding.CFTypeBasic
 		}

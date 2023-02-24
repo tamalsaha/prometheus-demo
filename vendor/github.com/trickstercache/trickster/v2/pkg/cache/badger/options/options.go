@@ -23,9 +23,9 @@ import (
 // Options is a collection of Configurations for storing cached data on the Filesystem in a Badger key-value store
 type Options struct {
 	// Directory represents the path on disk where the Badger database should store data
-	Directory string `yaml:"directory,omitempty"`
+	Directory string `json:"directory,omitempty"`
 	// ValueDirectory represents the path on disk where the Badger database will store its value log.
-	ValueDirectory string `yaml:"value_directory,omitempty"`
+	ValueDirectory string `json:"value_directory,omitempty"`
 }
 
 // New returns a reference to a new Badger Options

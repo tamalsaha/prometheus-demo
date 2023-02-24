@@ -23,24 +23,24 @@ import (
 // Options defines the operation of the Cache Indexer
 type Options struct {
 	// ReapIntervalMS defines how long the Cache Index reaper sleeps between reap cycles
-	ReapIntervalMS int `yaml:"reap_interval_ms,omitempty"`
+	ReapIntervalMS int `json:"reap_interval_ms,omitempty"`
 	// FlushIntervalMS sets how often the Cache Index saves its metadata to the cache from application memory
-	FlushIntervalMS int `yaml:"flush_interval_ms,omitempty"`
+	FlushIntervalMS int `json:"flush_interval_ms,omitempty"`
 	// MaxSizeBytes indicates how large the cache can grow in bytes before the Index evicts
 	// least-recently-accessed items.
-	MaxSizeBytes int64 `yaml:"max_size_bytes,omitempty"`
+	MaxSizeBytes int64 `json:"max_size_bytes,omitempty"`
 	// MaxSizeBackoffBytes indicates how far below max_size_bytes the cache size must be
 	// to complete a byte-size-based eviction exercise.
-	MaxSizeBackoffBytes int64 `yaml:"max_size_backoff_bytes,omitempty"`
+	MaxSizeBackoffBytes int64 `json:"max_size_backoff_bytes,omitempty"`
 	// MaxSizeObjects  indicates how large the cache can grow in objects before the Index
 	// evicts least-recently-accessed items.
-	MaxSizeObjects int64 `yaml:"max_size_objects,omitempty"`
+	MaxSizeObjects int64 `json:"max_size_objects,omitempty"`
 	// MaxSizeBackoffObjects indicates how far under max_size_objects the cache size must
 	// be to complete object-size-based eviction exercise.
-	MaxSizeBackoffObjects int64 `yaml:"max_size_backoff_objects,omitempty"`
+	MaxSizeBackoffObjects int64 `json:"max_size_backoff_objects,omitempty"`
 
-	ReapInterval  time.Duration `yaml:"-"`
-	FlushInterval time.Duration `yaml:"-"`
+	ReapInterval  time.Duration `json:"-"`
+	FlushInterval time.Duration `json:"-"`
 }
 
 // New returns a new Cache Index Options Reference with default values set
@@ -60,7 +60,6 @@ func New() *Options {
 // Equal returns true if all members of the subject and provided Options
 // are identical
 func (o *Options) Equal(o2 *Options) bool {
-
 	if o2 == nil {
 		return false
 	}

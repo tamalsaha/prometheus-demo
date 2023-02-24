@@ -61,8 +61,10 @@ var methodsMap = map[string]uint16{
 
 // AllHTTPMethods returns a list of all known HTTP methods
 func AllHTTPMethods() []string {
-	return []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodDelete,
-		http.MethodConnect, http.MethodOptions, http.MethodTrace, http.MethodPatch, MethodPurge}
+	return []string{
+		http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodDelete,
+		http.MethodConnect, http.MethodOptions, http.MethodTrace, http.MethodPatch, MethodPurge,
+	}
 }
 
 // GetAndPost returns a string slice containing "GET" and "POST"
@@ -77,8 +79,10 @@ func CacheableHTTPMethods() []string {
 
 // UncacheableHTTPMethods returns a list of HTTP methods that are generally considered uncacheable
 func UncacheableHTTPMethods() []string {
-	return []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodConnect,
-		http.MethodOptions, http.MethodTrace, http.MethodPatch, MethodPurge}
+	return []string{
+		http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodConnect,
+		http.MethodOptions, http.MethodTrace, http.MethodPatch, MethodPurge,
+	}
 }
 
 // IsCacheable returns true if the method is HEAD or GET

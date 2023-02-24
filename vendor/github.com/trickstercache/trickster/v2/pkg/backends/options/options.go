@@ -37,7 +37,7 @@ import (
 	"github.com/trickstercache/trickster/v2/pkg/util/yamlx"
 
 	"github.com/gorilla/mux"
-	"gopkg.in/yaml.v2"
+	"sigs.k8s.io/yaml"
 )
 
 var restrictedOriginNames = map[string]interface{}{"": true, "frontend": true}
@@ -47,109 +47,111 @@ type Lookup map[string]*Options
 
 // Options is a collection of configurations for Trickster backends
 type Options struct {
-
 	// HTTP and Proxy Configurations
 	//
 	// Hosts identifies the frontend hostnames this backend should handle (virtual hosting)
-	Hosts []string `yaml:"hosts,omitempty"`
+	Hosts []string `json:"hosts,omitempty"`
 	// Provider describes the type of backend (e.g., 'prometheus')
-	Provider string `yaml:"provider,omitempty"`
+	Provider string `json:"provider,omitempty"`
 	// OriginURL provides the base upstream URL for all proxied requests to this Backend.
 	// it can be as simple as http://example.com or as complex as https://example.com:8443/path/prefix
-	OriginURL string `yaml:"origin_url,omitempty"`
+	OriginURL string `json:"origin_url,omitempty"`
 	// TimeoutMS defines how long the HTTP request will wait for a response before timing out
-	TimeoutMS int64 `yaml:"timeout_ms,omitempty"`
+	TimeoutMS int64 `json:"timeout_ms,omitempty"`
 	// KeepAliveTimeoutMS defines how long an open keep-alive HTTP connection remains idle before closing
-	KeepAliveTimeoutMS int64 `yaml:"keep_alive_timeout_ms,omitempty"`
+	KeepAliveTimeoutMS int64 `json:"keep_alive_timeout_ms,omitempty"`
 	// MaxIdleConns defines maximum number of open keep-alive connections to maintain
-	MaxIdleConns int `yaml:"max_idle_conns,omitempty"`
+	MaxIdleConns int `json:"max_idle_conns,omitempty"`
 	// CacheName provides the name of the configured cache where the backend client will store it's cache data
-	CacheName string `yaml:"cache_name,omitempty"`
+	CacheName string `json:"cache_name,omitempty"`
 	// CacheKeyPrefix defines the cache key prefix the backend will use when writing objects to the cache
-	CacheKeyPrefix string `yaml:"cache_key_prefix,omitempty"`
+	CacheKeyPrefix string `json:"cache_key_prefix,omitempty"`
 	// HealthCheck is the health check options reference for this backend
-	HealthCheck *ho.Options `yaml:"healthcheck,omitempty"`
+	HealthCheck *ho.Options `json:"healthcheck,omitempty"`
 	// Object Proxy Cache and Delta Proxy Cache Configurations
 	// TimeseriesRetentionFactor limits the maximum the number of chronological
 	// timestamps worth of data to store in cache for each query
-	TimeseriesRetentionFactor int `yaml:"timeseries_retention_factor,omitempty"`
+	TimeseriesRetentionFactor int `json:"timeseries_retention_factor,omitempty"`
 	// TimeseriesEvictionMethodName specifies which methodology ("oldest", "lru") is used to identify
-	//timeseries to evict from a full cache object
-	TimeseriesEvictionMethodName string `yaml:"timeseries_eviction_method,omitempty"`
+	// timeseries to evict from a full cache object
+	TimeseriesEvictionMethodName string `json:"timeseries_eviction_method,omitempty"`
 	// BackfillToleranceMS prevents values with timestamps newer than the provided number of
 	// milliseconds from being cached. this allows propagation of upstream backfill operations
 	// that modify recently-cached data
-	BackfillToleranceMS int64 `yaml:"backfill_tolerance_ms,omitempty"`
+	BackfillToleranceMS int64 `json:"backfill_tolerance_ms,omitempty"`
 	// BackfillTolerancePoints is similar to the MS version, except that it's final value is dependent
 	// on the query step value to determine the relative duration of backfill tolerance per-query
 	// When both are set, the higher of the two values is used
-	BackfillTolerancePoints int `yaml:"backfill_tolerance_points,omitempty"`
+	BackfillTolerancePoints int `json:"backfill_tolerance_points,omitempty"`
 	// PathList is a list of Path Options that control the behavior of the given paths when requested
-	Paths map[string]*po.Options `yaml:"paths,omitempty"`
+	Paths map[string]*po.Options `json:"paths,omitempty"`
 	// NegativeCacheName provides the name of the Negative Cache Config to be used by this Backend
-	NegativeCacheName string `yaml:"negative_cache_name,omitempty"`
+	NegativeCacheName string `json:"negative_cache_name,omitempty"`
 	// TimeseriesTTLMS specifies the cache TTL of timeseries objects
-	TimeseriesTTLMS int `yaml:"timeseries_ttl_ms,omitempty"`
+	TimeseriesTTLMS int `json:"timeseries_ttl_ms,omitempty"`
 	// TimeseriesTTLMS specifies the cache TTL of fast forward data
-	FastForwardTTLMS int `yaml:"fastforward_ttl_ms,omitempty"`
+	FastForwardTTLMS int `json:"fastforward_ttl_ms,omitempty"`
 	// MaxTTLMS specifies the maximum allowed TTL for any cache object
-	MaxTTLMS int `yaml:"max_ttl_ms,omitempty"`
+	MaxTTLMS int `json:"max_ttl_ms,omitempty"`
 	// RevalidationFactor specifies how many times to multiply the object freshness lifetime
 	// by to calculate an absolute cache TTL
-	RevalidationFactor float64 `yaml:"revalidation_factor,omitempty"`
+	RevalidationFactor float64 `json:"revalidation_factor,omitempty"`
 	// MaxObjectSizeBytes specifies the max objectsize to be accepted for any given cache object
-	MaxObjectSizeBytes int `yaml:"max_object_size_bytes,omitempty"`
+	MaxObjectSizeBytes int `json:"max_object_size_bytes,omitempty"`
 	// CompressibleTypeList specifies the HTTP Object Content Types that will be compressed internally
 	// when stored in the Trickster cache or served to clients with a compatible 'Accept-Encoding' header
-	CompressibleTypeList []string `yaml:"compressible_types,omitempty"`
+	CompressibleTypeList []string `json:"compressible_types,omitempty"`
 	// TracingConfigName provides the name of the Tracing Config to be used by this Backend
-	TracingConfigName string `yaml:"tracing_name,omitempty"`
+	TracingConfigName string `json:"tracing_name,omitempty"`
 	// RuleName provides the name of the rule config to be used by this backend.
 	// This is only effective if the Backend provider is 'rule'
-	RuleName string `yaml:"rule_name,omitempty"`
+	RuleName string `json:"rule_name,omitempty"`
 	// ReqRewriterName is the name of a configured Rewriter that will modify the request prior to
 	// processing by the backend client
-	ReqRewriterName string `yaml:"req_rewriter_name,omitempty"`
+	ReqRewriterName string `json:"req_rewriter_name,omitempty"`
 	// MaxShardSizePoints defines the maximum size of a timeseries request in unique timestamps,
 	// before sharding into multiple requests of this denomination and reconsitituting the results.
 	// If MaxShardSizePoints and MaxShardSizeMS are both > 0, the configuration is invalid
-	MaxShardSizePoints int `yaml:"shard_max_size_points,omitempty"`
+	MaxShardSizePoints int `json:"shard_max_size_points,omitempty"`
 	// MaxShardSizeMS defines the max size of a timeseries request in milliseconds,
 	// before sharding into multiple requests of this denomination and reconsitituting the results.
 	// If MaxShardSizePoints and MaxShardSizeMS are both > 0, the configuration is invalid
-	MaxShardSizeMS int `yaml:"shard_max_size_ms,omitempty"`
+	MaxShardSizeMS int `json:"shard_max_size_ms,omitempty"`
 	// ShardStepMS defines the epoch-aligned cadence to use when creating shards. When set to 0,
 	// shards are not aligned to the epoch at a specific step. MaxShardSizeMS must be perfectly
 	// divisible by ShardStepMS when both are > 0, or the configuration is invalid
-	ShardStepMS int `yaml:"shard_step_ms,omitempty"`
+	ShardStepMS int `json:"shard_step_ms,omitempty"`
 
 	// ALBOptions holds the options for ALBs
-	ALBOptions *ao.Options `yaml:"alb,omitempty"`
+	ALBOptions *ao.Options `json:"alb,omitempty"`
 	// Prometheus holds options specific to prometheus backends
-	Prometheus *prop.Options `yaml:"prometheus,omitempty"`
+	Prometheus *prop.Options `json:"prometheus,omitempty"`
+
+	// Transport is the transport configuration for the Backend
+	Transport *TransportOptions `json:"transport,omitempty"`
 
 	// TLS is the TLS Configuration for the Frontend and Backend
-	TLS *to.Options `yaml:"tls,omitempty"`
+	TLS *to.Options `json:"tls,omitempty"`
 
 	// ForwardedHeaders indicates the class of 'Forwarded' header to attach to upstream requests
-	ForwardedHeaders string `yaml:"forwarded_headers,omitempty"`
+	ForwardedHeaders string `json:"forwarded_headers,omitempty"`
 
 	// IsDefault indicates if this is the d.Default backend for any request not matching a configured route
-	IsDefault bool `yaml:"is_default,omitempty"`
+	IsDefault bool `json:"is_default,omitempty"`
 	// FastForwardDisable indicates whether the FastForward feature should be disabled for this backend
-	FastForwardDisable bool `yaml:"fast_forward_disable,omitempty"`
+	FastForwardDisable bool `json:"fast_forward_disable,omitempty"`
 	// PathRoutingDisabled, when true, will bypass /backendName/path route registrations
-	PathRoutingDisabled bool `yaml:"path_routing_disabled,omitempty"`
+	PathRoutingDisabled bool `json:"path_routing_disabled,omitempty"`
 	// RequireTLS, when true, indicates this Backend Config's paths must only be registered with the TLS Router
-	RequireTLS bool `yaml:"require_tls,omitempty"`
+	RequireTLS bool `json:"require_tls,omitempty"`
 	// MultipartRangesDisabled, when true, indicates that if a downstream client requests multiple ranges
 	// in a single request, Trickster will instead request and return a 200 OK with the full object body
-	MultipartRangesDisabled bool `yaml:"multipart_ranges_disabled,omitempty"`
+	MultipartRangesDisabled bool `json:"multipart_ranges_disabled,omitempty"`
 	// DearticulateUpstreamRanges, when true, indicates that when Trickster requests multiple ranges from
 	// the backend, that they be requested as individual upstream requests instead of a single request that
 	// expects a multipart response	// this optimizes Trickster to request as few bytes as possible when
 	// fronting backends that only support single range requests
-	DearticulateUpstreamRanges bool `yaml:"dearticulate_upstream_ranges,omitempty"`
+	DearticulateUpstreamRanges bool `json:"dearticulate_upstream_ranges,omitempty"`
 
 	// Simulated Latency
 	// When LatencyMinMS > 0 and LatencyMaxMS < LatencyMinMS (e.g., 0), then LatencyMinMS of latency
@@ -157,64 +159,66 @@ type Options struct {
 	// latency between the two values will be applied to the request
 	//
 	// LatencyMin is the minimum amount of simulated latency to apply to each incoming request
-	LatencyMinMS int `yaml:"latency_min_ms"`
+	// +optional
+	LatencyMinMS int `json:"latency_min_ms,omitempty"`
 	// LatencyMax is the maximum amount of simulated latency to apply to each incoming request
-	LatencyMaxMS int `yaml:"latency_max_ms"`
+	// +optional
+	LatencyMaxMS int `json:"latency_max_ms,omitempty"`
 
 	// Synthesized Configurations
 	// These configurations are parsed versions of those defined above, and are what Trickster uses internally
 	//
 	// Name is the Name of the backend, taken from the Key in the Backends map[string]*BackendOptions
-	Name string `yaml:"-"`
+	Name string `json:"-"`
 	// Router is a mux.Router containing this backend's Path Routes; it is set during route registration
-	Router *mux.Router `yaml:"-"`
+	Router *mux.Router `json:"-"`
 	// Timeout is the time.Duration representation of TimeoutMS
-	Timeout time.Duration `yaml:"-"`
+	Timeout time.Duration `json:"-"`
 	// BackfillTolerance is the time.Duration representation of BackfillToleranceMS
-	BackfillTolerance time.Duration `yaml:"-"`
+	BackfillTolerance time.Duration `json:"-"`
 	// ValueRetention is the time.Duration representation of ValueRetentionSecs
-	ValueRetention time.Duration `yaml:"-"`
+	ValueRetention time.Duration `json:"-"`
 	// Scheme is the layer 7 protocol indicator (e.g. 'http'), derived from OriginURL
-	Scheme string `yaml:"-"`
+	Scheme string `json:"-"`
 	// Host is the upstream hostname/IP[:port] the backend client will connect to when fetching uncached data,
 	// derived from OriginURL
-	Host string `yaml:"-"`
+	Host string `json:"-"`
 	// PathPrefix provides any prefix added to the front of the requested path when constructing the upstream
 	// request url, derived from OriginURL
-	PathPrefix string `yaml:"-"`
+	PathPrefix string `json:"-"`
 	// NegativeCache provides a map for the negative cache, with TTLs converted to time.Durations
-	NegativeCache negative.Lookup `yaml:"-"`
+	NegativeCache negative.Lookup `json:"-"`
 	// TimeseriesRetention when subtracted from time.Now() represents the oldest allowable timestamp in a
 	// timeseries when EvictionMethod is 'oldest'
-	TimeseriesRetention time.Duration `yaml:"-"`
+	TimeseriesRetention time.Duration `json:"-"`
 	// TimeseriesEvictionMethod is the parsed value of TimeseriesEvictionMethodName
-	TimeseriesEvictionMethod evictionmethods.TimeseriesEvictionMethod `yaml:"-"`
+	TimeseriesEvictionMethod evictionmethods.TimeseriesEvictionMethod `json:"-"`
 	// TimeseriesTTL is the parsed value of TimeseriesTTLMS
-	TimeseriesTTL time.Duration `yaml:"-"`
+	TimeseriesTTL time.Duration `json:"-"`
 	// FastForwardTTL is the parsed value of FastForwardTTL
-	FastForwardTTL time.Duration `yaml:"-"`
+	FastForwardTTL time.Duration `json:"-"`
 	// FastForwardPath is the paths.Options to use for upstream Fast Forward Requests
-	FastForwardPath *po.Options `yaml:"-"`
+	FastForwardPath *po.Options `json:"-"`
 	// MaxTTL is the parsed value of MaxTTLMS
-	MaxTTL time.Duration `yaml:"-"`
+	MaxTTL time.Duration `json:"-"`
 	// HTTPClient is the Client used by Trickster to communicate with the origin
-	HTTPClient *http.Client `yaml:"-"`
+	HTTPClient *http.Client `json:"-"`
 	// CompressibleTypes is the map version of CompressibleTypeList for fast lookup
-	CompressibleTypes map[string]interface{} `yaml:"-"`
+	CompressibleTypes map[string]interface{} `json:"-"`
 	// RuleOptions is the reference to the Rule Options as indicated by RuleName
-	RuleOptions *ro.Options `yaml:"-"`
+	RuleOptions *ro.Options `json:"-"`
 	// ReqRewriter is the rewriter handler as indicated by RuleName
-	ReqRewriter rewriter.RewriteInstructions
+	ReqRewriter rewriter.RewriteInstructions `json:"-"`
 	// DoesShard is true when sharding will be used with this origin, based on how the
 	// sharding options have been configured
-	DoesShard bool `yaml:"-"`
+	DoesShard bool `json:"-"`
 	// MaxShardSize is the parsed version of MaxShardSizeMS
-	MaxShardSize time.Duration `yaml:"-"`
+	MaxShardSize time.Duration `json:"-"`
 	// ShardStep is the parsed version of ShardStepMS
-	ShardStep time.Duration `yaml:"-"`
+	ShardStep time.Duration `json:"-"`
 
 	//
-	md yamlx.KeyLookup `yaml:"-"`
+	md yamlx.KeyLookup `json:"-"`
 }
 
 // New will return a pointer to a Backend Options with the default configuration settings
@@ -244,6 +248,7 @@ func New() *Options {
 		MaxShardSize:                 time.Duration(DefaultTimeseriesShardSize) * time.Millisecond,
 		ShardStepMS:                  DefaultTimeseriesShardStep,
 		ShardStep:                    time.Duration(DefaultTimeseriesShardStep) * time.Millisecond,
+		Transport:                    &TransportOptions{},
 		TLS:                          &to.Options{},
 		Timeout:                      time.Millisecond * DefaultBackendTimeoutMS,
 		TimeoutMS:                    DefaultBackendTimeoutMS,
@@ -259,7 +264,6 @@ func New() *Options {
 
 // Clone returns an exact copy of an *backends.Options
 func (o *Options) Clone() *Options {
-
 	no := &Options{}
 	no.DearticulateUpstreamRanges = o.DearticulateUpstreamRanges
 	no.BackfillTolerance = o.BackfillTolerance
@@ -333,6 +337,10 @@ func (o *Options) Clone() *Options {
 			m[c] = t
 		}
 		no.NegativeCache = m
+	}
+
+	if o.Transport != nil {
+		no.Transport = o.Transport.Clone()
 	}
 
 	if o.TLS != nil {
@@ -501,7 +509,6 @@ func SetDefaults(
 	backends Lookup,
 	activeCaches map[string]interface{},
 ) (*Options, error) {
-
 	if metadata == nil {
 		return nil, ErrInvalidMetadata
 	}
@@ -703,7 +710,6 @@ func SetDefaults(
 // CloneYAMLSafe returns a copy of the Options that is safe to export to YAML without
 // exposing credentials (by masking known credential fields with "*****")
 func (o *Options) CloneYAMLSafe() *Options {
-
 	co := o.Clone()
 	for _, w := range co.Paths {
 		w.Handler = nil
@@ -723,4 +729,19 @@ func (o *Options) ToYAML() string {
 	co := o.CloneYAMLSafe()
 	b, _ := yaml.Marshal(co)
 	return string(b)
+}
+
+// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
+func (in *Options) DeepCopyInto(out *Options) {
+	*out = *in.Clone()
+}
+
+// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new Options.
+func (in *Options) DeepCopy() *Options {
+	if in == nil {
+		return nil
+	}
+	out := new(Options)
+	in.DeepCopyInto(out)
+	return out
 }
