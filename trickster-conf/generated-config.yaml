@@ -1,0 +1,237 @@
+backends:
+  default:
+    cache_key_prefix: 127.0.0.1:49700
+    cache_name: default
+    fastforward_ttl_ms: 15000
+    forwarded_headers: standard
+    healthcheck:
+      expected_codes:
+      - 200
+      host: 127.0.0.1:49700
+      path: /api/v1/namespaces/monitoring/services/http:kube-prometheus-stack-prometheus:9090/proxy/api/v1/query
+      query: query=up
+      scheme: https
+      verb: GET
+    is_default: true
+    keep_alive_timeout_ms: 300000
+    max_idle_conns: 20
+    max_object_size_bytes: 524288
+    max_ttl_ms: 86400000
+    negative_cache_name: default
+    origin_url: https://127.0.0.1:49700/api/v1/namespaces/monitoring/services/http:kube-prometheus-stack-prometheus:9090/proxy/
+    paths:
+      /-0000000101:
+        handler: proxy
+        match_type: prefix
+        methods:
+        - GET
+        - POST
+        no_metrics: false
+        path: /
+      /api/v1/-0000000101:
+        handler: proxy
+        match_type: prefix
+        methods:
+        - GET
+        - POST
+        no_metrics: false
+        path: /api/v1/
+      /api/v1/admin-1111111111:
+        handler: admin
+        match_type: prefix
+        methods:
+        - GET
+        - HEAD
+        - POST
+        - PUT
+        - DELETE
+        - CONNECT
+        - OPTIONS
+        - TRACE
+        - PATCH
+        - PURGE
+        no_metrics: false
+        path: /api/v1/admin
+      /api/v1/alertmanagers-0000000001:
+        handler: proxycache
+        match_type: exact
+        methods:
+        - GET
+        no_metrics: false
+        path: /api/v1/alertmanagers
+        response_headers:
+          Cache-Control: s-maxage=30
+      /api/v1/alerts-0000000001:
+        handler: alerts
+        match_type: exact
+        methods:
+        - GET
+        no_metrics: false
+        path: /api/v1/alerts
+        response_headers:
+          Cache-Control: s-maxage=30
+      /api/v1/label/-0000000001:
+        handler: labels
+        match_type: prefix
+        methods:
+        - GET
+        no_metrics: false
+        path: /api/v1/label/
+        response_headers:
+          Cache-Control: s-maxage=30
+      /api/v1/labels-0000000101:
+        handler: labels
+        match_type: exact
+        methods:
+        - GET
+        - POST
+        no_metrics: false
+        path: /api/v1/labels
+        response_headers:
+          Cache-Control: s-maxage=30
+      /api/v1/query-0000000101:
+        cache_key_params:
+        - query
+        - time
+        handler: query
+        match_type: exact
+        methods:
+        - GET
+        - POST
+        no_metrics: false
+        path: /api/v1/query
+        response_headers:
+          Cache-Control: s-maxage=30
+      /api/v1/query_range-0000000101:
+        cache_key_params:
+        - query
+        - step
+        handler: query_range
+        match_type: exact
+        methods:
+        - GET
+        - POST
+        no_metrics: false
+        path: /api/v1/query_range
+        response_headers:
+          Cache-Control: s-maxage=21600
+      /api/v1/rules-0000000001:
+        handler: proxycache
+        match_type: exact
+        methods:
+        - GET
+        no_metrics: false
+        path: /api/v1/rules
+        response_headers:
+          Cache-Control: s-maxage=30
+      /api/v1/series-0000000101:
+        cache_key_params:
+        - match[]
+        - start
+        - end
+        handler: series
+        match_type: exact
+        methods:
+        - GET
+        - POST
+        no_metrics: false
+        path: /api/v1/series
+        response_headers:
+          Cache-Control: s-maxage=30
+      /api/v1/status-0000000001:
+        handler: proxycache
+        match_type: prefix
+        methods:
+        - GET
+        no_metrics: false
+        path: /api/v1/status
+        response_headers:
+          Cache-Control: s-maxage=30
+      /api/v1/targets-0000000001:
+        handler: proxycache
+        match_type: exact
+        methods:
+        - GET
+        no_metrics: false
+        path: /api/v1/targets
+        response_headers:
+          Cache-Control: s-maxage=30
+      /api/v1/targets/metadata-0000000001:
+        cache_key_params:
+        - match_target
+        - metric
+        - limit
+        handler: proxycache
+        match_type: exact
+        methods:
+        - GET
+        no_metrics: false
+        path: /api/v1/targets/metadata
+        response_headers:
+          Cache-Control: s-maxage=30
+    prometheus:
+      instant_round_ms: 15000
+    provider: prometheus
+    revalidation_factor: 2
+    timeout_ms: 180000
+    timeseries_eviction_method: oldest
+    timeseries_retention_factor: 1024
+    timeseries_ttl_ms: 21600000
+    tls:
+      certificate_authority_paths:
+      - /Users/tamal/go/src/github.com/tamalsaha/prometheus-demo/certs/ca.crt
+      client_cert_path: /Users/tamal/go/src/github.com/tamalsaha/prometheus-demo/certs/tls.crt
+      client_key_path: /Users/tamal/go/src/github.com/tamalsaha/prometheus-demo/certs/tls.key
+    tracing_name: default
+caches:
+  default:
+    badger:
+      directory: /tmp/trickster
+      value_directory: /tmp/trickster
+    bbolt:
+      bucket: trickster
+      filename: trickster.db
+    filesystem:
+      cache_path: /tmp/trickster
+    index:
+      flush_interval_ms: 5000
+      max_size_backoff_bytes: 16777216
+      max_size_backoff_objects: 100
+      max_size_bytes: 536870912
+      reap_interval_ms: 3000
+    provider: memory
+    redis:
+      client_type: standard
+      endpoint: redis:6379
+      endpoints:
+      - redis:6379
+      protocol: tcp
+frontend:
+  listen_port: 9090
+  tls_listen_port: 8483
+logging:
+  log_level: info
+main:
+  config_handler_path: /trickster/config
+  health_handler_path: /trickster/health
+  ping_handler_path: /trickster/ping
+  pprof_server: both
+  reload_handler_path: /trickster/config/reload
+  server_name: m1.local
+metrics:
+  listen_port: 8481
+negative_caches:
+  default: {}
+reloading:
+  drain_timeout_ms: 30000
+  handler_path: /trickster/config/reload
+  listen_address: 127.0.0.1
+  listen_port: 8484
+  rate_limit_ms: 3000
+tracing:
+  default:
+    jaeger: {}
+    provider: none
+    sample_rate: 1
+    service_name: trickster
+    stdout: {}

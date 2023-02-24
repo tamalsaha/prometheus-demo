@@ -58,7 +58,7 @@ func NewClient() (client.Client, error) {
 	})
 }
 
-func main() {
+func main_gen_config() {
 	cfg := ctrl.GetConfigOrDie()
 	pc, err := prepConfig(cfg, ServiceReference{
 		Scheme:    "http",
@@ -119,11 +119,11 @@ func main() {
 	}
 }
 
-func main__() {
+func main() {
 	pc, err := promapi.NewClient(promapi.Config{
-		Address: "http://127.0.0.1:9090/1-a374b4a1-04e2-4164-b268-4f4799f697ed",
-		// Address: "http://172.104.199.217:9090",
-		Client: http.DefaultClient,
+		// Address: "http://127.0.0.1:9090/1-a374b4a1-04e2-4164-b268-4f4799f697ed",
+		Address: "http://127.0.0.1:9090",
+		Client:  http.DefaultClient,
 	})
 	if err != nil {
 		panic(err)
