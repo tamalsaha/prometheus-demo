@@ -4,6 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
 	promapi "github.com/prometheus/client_golang/api"
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	prom_config "github.com/prometheus/common/config"
@@ -21,17 +29,11 @@ import (
 	"k8s.io/klog/v2/klogr"
 	kmapi "kmodules.xyz/client-go/api/v1"
 	au "kmodules.xyz/client-go/client/apiutil"
-	"log"
-	"net/http"
-	"os"
-	"path/filepath"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/yaml"
-	"strconv"
-	"strings"
-	"time"
 )
 
 func NewClient() (client.Client, error) {
@@ -85,7 +87,7 @@ func main_gen_config() {
 			ListenPort: 9090,
 		},
 		Backends: map[string]*bo.Options{
-			"default": &bo.Options{
+			"default": {
 				Provider:  "prometheus",
 				OriginURL: pc.Addr,
 				TLS: &to.Options{
@@ -113,7 +115,7 @@ func main_gen_config() {
 	}
 
 	// /Users/tamal/go/src/github.com/tamalsaha/prometheus-demo/trickster-conf
-	err = os.WriteFile("trickster-conf/config.yaml", data, 0644)
+	err = os.WriteFile("trickster-conf/config.yaml", data, 0o644)
 	if err != nil {
 		panic(err)
 	}
@@ -230,7 +232,7 @@ func prepConfig(cfg *rest.Config, ref ServiceReference) (*prometheus.Config, err
 	}
 
 	certDir := "certs"
-	err := os.MkdirAll(certDir, 0755)
+	err := os.MkdirAll(certDir, 0o755)
 	if err != nil {
 		return nil, err
 	}
