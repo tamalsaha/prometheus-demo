@@ -1,5 +1,6 @@
 backends:
   default:
+    req_rewriter_name: example_rewriter
     origin_url: https://127.0.0.1:49700/api/v1/namespaces/monitoring/services/http:kube-prometheus-stack-prometheus:9090/proxy/
     provider: prometheus
     tls:
@@ -13,3 +14,9 @@ logging:
   log_level: info
 metrics:
   listen_port: 8481
+
+# https://trickstercache.org/docs/paths/request-rewriters/
+request_rewriters:
+  example_rewriter:
+    instructions:
+    - [ 'header', 'set', 'Authorization', 'Basic dGFtYWw6cGFzc3dvcmQ=' ]
