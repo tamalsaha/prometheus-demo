@@ -18,4 +18,4 @@ request_rewriters:
     - - header
       - set
       - Authorization
-      - Bearer ****
+      - Bearer ***

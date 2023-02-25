@@ -14,6 +14,7 @@ import (
 	"time"
 
 	promapi "github.com/prometheus/client_golang/api"
+
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	prom_config "github.com/prometheus/common/config"
 	"github.com/tamalsaha/prometheus-demo/prometheus"
@@ -160,8 +161,12 @@ func main_gen_cfg() {
 }
 
 func main() {
+	/*
+		1-a374b4a1-04e2-4164-b268-4f4799f697ed   36d
+		1-be34d9c6-74eb-4bfe-bf22-f57c0065b713   36d
+	*/
 	pc, err := promapi.NewClient(promapi.Config{
-		Address: "http://127.0.0.1:9090/" + backendName,
+		Address: "http://127.0.0.1:9090/" + "1-be34d9c6-74eb-4bfe-bf22-f57c0065b713",
 		Client:  http.DefaultClient,
 	})
 	if err != nil {
@@ -169,21 +174,21 @@ func main() {
 	}
 
 	/*
-			cfg := ctrl.GetConfigOrDie()
-			pcfg, err := prepConfig(cfg, ServiceReference{
-				Scheme:    "http",
-		        // Name:      "kube-prometheus-stack-prometheus"
-				Name:      "prometheus-kube-prometheus-prometheus",
-				Namespace: "monitoring",
-				Port:      9090,
-			})
-			if err != nil {
-				panic(err)
-			}
-			pc, err := pcfg.NewPrometheusClient()
-			if err != nil {
-				panic(err)
-			}
+		cfg := ctrl.GetConfigOrDie()
+		pcfg, err := prepConfig(cfg, ServiceReference{
+			Scheme: "http",
+			// Name:      "kube-prometheus-stack-prometheus"
+			Name:      "prometheus-kube-prometheus-prometheus",
+			Namespace: "monitoring",
+			Port:      9090,
+		})
+		if err != nil {
+			panic(err)
+		}
+		pc, err := pcfg.NewPrometheusClient()
+		if err != nil {
+			panic(err)
+		}
 	*/
 
 	pc2 := promv1.NewAPI(pc)

@@ -1,0 +1,67 @@
+main:
+  config_handler_path: "/trickster/config"
+  ping_handler_path: "/trickster/ping"
+  reload_handler_path: "/trickster/config/reload"
+  health_handler_path: "/trickster/health"
+  pprof_server: both
+  server_name: trickster-7449c7dc48-wxgwm
+backends:
+  1-be34d9c6-74eb-4bfe-bf22-f57c0065b713:
+    provider: prometheus
+    origin_url: https://dc773136-2db3-4474-a6ea-20461c67ca54.cpc1-us-central.linodelke.net:443/api/v1/namespaces/monitoring/services/http:prometheus-kube-prometheus-prometheus:9090/proxy
+    req_rewriter_name: 1-be34d9c6-74eb-4bfe-bf22-f57c0065b713
+    transport:
+      type: Direct
+    tls:
+      certificate_authority_paths:
+      - /Users/tamal/go/src/github.com/tamalsaha/prometheus-demo/trickster-conf/1-be34d9c6-74eb-4bfe-bf22-f57c0065b713/ca.crt
+caches:
+  default:
+    provider: memory
+    index:
+      reap_interval_ms: 3000
+      flush_interval_ms: 5000
+      max_size_bytes: 536870912
+      max_size_backoff_bytes: 16777216
+      max_size_backoff_objects: 100
+    redis:
+      client_type: standard
+      protocol: tcp
+      endpoint: redis:6379
+      endpoints:
+      - redis:6379
+    filesystem:
+      cache_path: "/tmp/trickster"
+    bbolt:
+      filename: trickster.db
+      bucket: trickster
+    badger:
+      directory: "/tmp/trickster"
+      value_directory: "/tmp/trickster"
+frontend:
+  listen_port: 9090
+logging:
+  log_level: info
+metrics:
+  listen_port: 8481
+tracing:
+  default:
+    provider: none
+    service_name: trickster
+    stdout: {}
+    jaeger: {}
+negative_caches:
+  default: {}
+request_rewriters:
+  1-be34d9c6-74eb-4bfe-bf22-f57c0065b713:
+    instructions:
+    - - header
+      - set
+      - Authorization
+      - Bearer ***
+reloading:
+  listen_address: 127.0.0.1
+  listen_port: 8484
+  handler_path: "/trickster/config/reload"
+  drain_timeout_ms: 30000
+  rate_limit_ms: 3000
