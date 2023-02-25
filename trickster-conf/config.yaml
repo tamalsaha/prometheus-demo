@@ -1,22 +1,21 @@
 backends:
-  default:
-    req_rewriter_name: example_rewriter
-    origin_url: https://127.0.0.1:49700/api/v1/namespaces/monitoring/services/http:kube-prometheus-stack-prometheus:9090/proxy/
+  k8s:
+    origin_url: https://dc773136-2db3-4474-a6ea-20461c67ca54.cpc1-us-central.linodelke.net:443/api/v1/namespaces/monitoring/services/http:prometheus-kube-prometheus-prometheus:9090/proxy/
     provider: prometheus
+    req_rewriter_name: k8s
     tls:
       certificate_authority_paths:
       - /Users/tamal/go/src/github.com/tamalsaha/prometheus-demo/certs/ca.crt
-      client_cert_path: /Users/tamal/go/src/github.com/tamalsaha/prometheus-demo/certs/tls.crt
-      client_key_path: /Users/tamal/go/src/github.com/tamalsaha/prometheus-demo/certs/tls.key
 frontend:
   listen_port: 9090
 logging:
   log_level: info
 metrics:
   listen_port: 8481
-
-# https://trickstercache.org/docs/paths/request-rewriters/
 request_rewriters:
-  example_rewriter:
+  k8s:
     instructions:
-    - [ 'header', 'set', 'Authorization', 'Basic dGFtYWw6cGFzc3dvcmQ=' ]
+    - - header
+      - set
+      - Authorization
+      - Bearer ****

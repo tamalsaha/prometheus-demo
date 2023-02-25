@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -21,6 +22,7 @@ import (
 	fropt "github.com/trickstercache/trickster/v2/pkg/frontend/options"
 	lo "github.com/trickstercache/trickster/v2/pkg/observability/logging/options"
 	mo "github.com/trickstercache/trickster/v2/pkg/observability/metrics/options"
+	rwopts "github.com/trickstercache/trickster/v2/pkg/proxy/request/rewriter/options"
 	to "github.com/trickstercache/trickster/v2/pkg/proxy/tls/options"
 	core "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -60,11 +62,14 @@ func NewClient() (client.Client, error) {
 	})
 }
 
-func main_gen_config() {
+const backendName = "k8s"
+
+func main_gen_cfg() {
 	cfg := ctrl.GetConfigOrDie()
 	pc, err := prepConfig(cfg, ServiceReference{
-		Scheme:    "http",
-		Name:      "kube-prometheus-stack-prometheus",
+		Scheme: "http",
+		// Name:      "kube-prometheus-stack-prometheus"
+		Name:      "prometheus-kube-prometheus-prometheus",
 		Namespace: "monitoring",
 		Port:      9090,
 	})
@@ -87,7 +92,7 @@ func main_gen_config() {
 			ListenPort: 9090,
 		},
 		Backends: map[string]*bo.Options{
-			"default": {
+			backendName: {
 				Provider:  "prometheus",
 				OriginURL: pc.Addr,
 				TLS: &to.Options{
@@ -96,8 +101,8 @@ func main_gen_config() {
 					CertificateAuthorityPaths: []string{
 						filepath.Join(pwd, "certs", "ca.crt"),
 					},
-					ClientCertPath: filepath.Join(pwd, "certs", "tls.crt"),
-					ClientKeyPath:  filepath.Join(pwd, "certs", "tls.key"),
+					// ClientCertPath: filepath.Join(pwd, "certs", "tls.crt"),
+					// ClientKeyPath:  filepath.Join(pwd, "certs", "tls.key"),
 				},
 			},
 		},
@@ -107,6 +112,39 @@ func main_gen_config() {
 		Logging: &lo.Options{
 			LogLevel: "info",
 		},
+	}
+
+	if pc.BasicAuth.Password != "" {
+		cfg2.RequestRewriters = map[string]*rwopts.Options{
+			backendName: {
+				Instructions: rwopts.RewriteList{
+					{
+						"header",
+						"set",
+						"Authorization",
+						"Basic " + base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", pc.BasicAuth.Username, pc.BasicAuth.Password))),
+					},
+				},
+			},
+		}
+		cfg2.Backends[backendName].ReqRewriterName = backendName
+	} else if pc.BearerToken != "" {
+		cfg2.RequestRewriters = map[string]*rwopts.Options{
+			backendName: {
+				Instructions: rwopts.RewriteList{
+					{
+						"header",
+						"set",
+						"Authorization",
+						"Bearer " + pc.BearerToken,
+					},
+				},
+			},
+		}
+		cfg2.Backends[backendName].ReqRewriterName = backendName
+	} else {
+		cfg2.Backends[backendName].TLS.ClientCertPath = filepath.Join(pwd, "certs", "tls.crt")
+		cfg2.Backends[backendName].TLS.ClientKeyPath = filepath.Join(pwd, "certs", "tls.key")
 	}
 
 	data, err := yaml.Marshal(cfg2)
@@ -123,13 +161,31 @@ func main_gen_config() {
 
 func main() {
 	pc, err := promapi.NewClient(promapi.Config{
-		// Address: "http://127.0.0.1:9090/1-a374b4a1-04e2-4164-b268-4f4799f697ed",
-		Address: "http://127.0.0.1:9090",
+		Address: "http://127.0.0.1:9090/" + backendName,
 		Client:  http.DefaultClient,
 	})
 	if err != nil {
 		panic(err)
 	}
+
+	/*
+			cfg := ctrl.GetConfigOrDie()
+			pcfg, err := prepConfig(cfg, ServiceReference{
+				Scheme:    "http",
+		        // Name:      "kube-prometheus-stack-prometheus"
+				Name:      "prometheus-kube-prometheus-prometheus",
+				Namespace: "monitoring",
+				Port:      9090,
+			})
+			if err != nil {
+				panic(err)
+			}
+			pc, err := pcfg.NewPrometheusClient()
+			if err != nil {
+				panic(err)
+			}
+	*/
+
 	pc2 := promv1.NewAPI(pc)
 
 	promCPUQuery := `up`
@@ -237,18 +293,24 @@ func prepConfig(cfg *rest.Config, ref ServiceReference) (*prometheus.Config, err
 		return nil, err
 	}
 
-	caFile := filepath.Join(certDir, "ca.crt")
-	certFile := filepath.Join(certDir, "tls.crt")
-	keyFile := filepath.Join(certDir, "tls.key")
-
+	var caFile, certFile, keyFile string
+	caFile = filepath.Join(certDir, "ca.crt")
 	if err := os.WriteFile(caFile, cfg.TLSClientConfig.CAData, 0o644); err != nil {
 		return nil, err
 	}
-	if err := os.WriteFile(certFile, cfg.TLSClientConfig.CertData, 0o644); err != nil {
-		return nil, err
+
+	if len(cfg.TLSClientConfig.CertData) > 0 {
+		certFile = filepath.Join(certDir, "tls.crt")
+		if err := os.WriteFile(certFile, cfg.TLSClientConfig.CertData, 0o644); err != nil {
+			return nil, err
+		}
 	}
-	if err := os.WriteFile(keyFile, cfg.TLSClientConfig.KeyData, 0o644); err != nil {
-		return nil, err
+
+	if len(cfg.TLSClientConfig.KeyData) > 0 {
+		keyFile = filepath.Join(certDir, "tls.key")
+		if err := os.WriteFile(keyFile, cfg.TLSClientConfig.KeyData, 0o644); err != nil {
+			return nil, err
+		}
 	}
 
 	return &prometheus.Config{
@@ -259,7 +321,7 @@ func prepConfig(cfg *rest.Config, ref ServiceReference) (*prometheus.Config, err
 			PasswordFile: "",
 		},
 		BearerToken:     cfg.BearerToken,
-		BearerTokenFile: cfg.BearerTokenFile,
+		BearerTokenFile: "",
 		ProxyURL:        "",
 		TLSConfig: prom_config.TLSConfig{
 			CAFile:             caFile,
