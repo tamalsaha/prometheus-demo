@@ -169,13 +169,14 @@ func main_gen_cfg() {
 	}
 }
 
-func main_test_conn() {
+func main() {
 	/*
 		1-a374b4a1-04e2-4164-b268-4f4799f697ed   36d
 		1-be34d9c6-74eb-4bfe-bf22-f57c0065b713   36d
 	*/
 	pc, err := promapi.NewClient(promapi.Config{
-		Address: "http://127.0.0.1:9090/" + "1-be34d9c6-74eb-4bfe-bf22-f57c0065b713",
+		// Address: "http://127.0.0.1:9090/" + "1-be34d9c6-74eb-4bfe-bf22-f57c0065b713",
+		Address: "https://trickster.appscode.ninja/" + "1-be34d9c6-74eb-4bfe-bf22-f57c0065b713",
 		Client:  http.DefaultClient,
 	})
 	if err != nil {
@@ -307,7 +308,7 @@ func prepConfig(cfg *rest.Config, ref ServiceReference) (*prometheus.Config, err
 	}, nil
 }
 
-func main() {
+func main_gen_crd_config() {
 	if err := genCRDConfig(); err != nil {
 		panic(err)
 	}
