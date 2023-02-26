@@ -1,0 +1,102 @@
+backends:
+  1-be34d9c6-74eb-4bfe-bf22-f57c0065b713:
+    cache_key_prefix: dc773136-2db3-4474-a6ea-20461c67ca54.cpc1-us-central.linodelke.net:443
+    cache_name: default
+    compressible_types:
+    - text/html
+    - text/javascript
+    - text/css
+    - text/plain
+    - text/xml
+    - text/json
+    - application/json
+    - application/javascript
+    - application/xml
+    fastforward_ttl_ms: 15000
+    forwarded_headers: standard
+    healthcheck:
+      expected_codes:
+      - 200
+      failure_threshold: 3
+      path: /
+      recovery_threshold: 3
+      scheme: http
+      verb: GET
+    keep_alive_timeout_ms: 300000
+    max_idle_conns: 20
+    max_object_size_bytes: 524288
+    max_ttl_ms: 86400000
+    negative_cache_name: default
+    origin_url: https://dc773136-2db3-4474-a6ea-20461c67ca54.cpc1-us-central.linodelke.net:443/api/v1/namespaces/monitoring/services/http:prometheus-kube-prometheus-prometheus:9090/proxy
+    prometheus:
+      instant_round_ms: 15000
+    provider: prometheus
+    req_rewriter_name: 1-be34d9c6-74eb-4bfe-bf22-f57c0065b713
+    revalidation_factor: 2
+    timeout_ms: 180000
+    timeseries_eviction_method: oldest
+    timeseries_retention_factor: 1024
+    timeseries_ttl_ms: 21600000
+    tls:
+      certificate_authority_paths:
+      - /Users/tamal/go/src/github.com/tamalsaha/prometheus-demo/trickster-conf/1-be34d9c6-74eb-4bfe-bf22-f57c0065b713/ca.crt
+    tracing_name: default
+caches:
+  default:
+    badger:
+      directory: /tmp/trickster
+      value_directory: /tmp/trickster
+    bbolt:
+      bucket: trickster
+      filename: trickster.db
+    filesystem:
+      cache_path: /tmp/trickster
+    index:
+      flush_interval_ms: 5000
+      max_size_backoff_bytes: 16777216
+      max_size_backoff_objects: 100
+      max_size_bytes: 536870912
+      reap_interval_ms: 3000
+    provider: memory
+    redis:
+      client_type: standard
+      endpoint: redis:6379
+      endpoints:
+      - redis:6379
+      protocol: tcp
+frontend:
+  listen_port: 9090
+  tls_listen_port: 8483
+logging:
+  log_level: info
+main:
+  config_handler_path: /trickster/config
+  health_handler_path: /trickster/health
+  ping_handler_path: /trickster/ping
+  pprof_server: both
+  reload_handler_path: /trickster/config/reload
+  server_name: m1.local
+metrics:
+  listen_port: 8481
+negative_caches:
+  default: {}
+reloading:
+  drain_timeout_ms: 30000
+  handler_path: /trickster/config/reload
+  listen_address: 127.0.0.1
+  listen_port: 8484
+  rate_limit_ms: 3000
+request_rewriters:
+  1-be34d9c6-74eb-4bfe-bf22-f57c0065b713:
+    instructions:
+    - - header
+      - set
+      - Authorization
+      - Bearer ***
+tracing:
+  default:
+    jaeger: {}
+    provider: none
+    sample_rate: 1
+    service_name: trickster
+    stdout: {}

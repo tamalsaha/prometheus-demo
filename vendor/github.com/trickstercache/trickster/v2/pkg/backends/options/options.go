@@ -364,6 +364,10 @@ func (o *Options) Clone() *Options {
 		no.Prometheus = o.Prometheus.Clone()
 	}
 
+	if o.Transport != nil {
+		no.Transport = o.Transport.Clone()
+	}
+
 	return no
 }
 
@@ -694,6 +698,10 @@ func SetDefaults(
 
 	if metadata.IsDefined("backends", name, "prometheus") {
 		no.Prometheus = o.Prometheus.Clone()
+	}
+
+	if metadata.IsDefined("backends", name, "transport") {
+		no.Transport = o.Transport.Clone()
 	}
 
 	if metadata.IsDefined("backends", name, "latency_min_ms") {

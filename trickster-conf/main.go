@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,34 +14,43 @@ import (
 	"time"
 
 	promapi "github.com/prometheus/client_golang/api"
-
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	prom_config "github.com/prometheus/common/config"
 	"github.com/tamalsaha/prometheus-demo/prometheus"
 	"github.com/trickstercache/trickster/v2/cmd/trickster/config"
+	"github.com/trickstercache/trickster/v2/cmd/trickster/config/validate"
 	bo "github.com/trickstercache/trickster/v2/pkg/backends/options"
+	rule "github.com/trickstercache/trickster/v2/pkg/backends/rule/options"
+	"github.com/trickstercache/trickster/v2/pkg/cache/negative"
+	cache "github.com/trickstercache/trickster/v2/pkg/cache/options"
 	fropt "github.com/trickstercache/trickster/v2/pkg/frontend/options"
 	lo "github.com/trickstercache/trickster/v2/pkg/observability/logging/options"
 	mo "github.com/trickstercache/trickster/v2/pkg/observability/metrics/options"
+	tracing "github.com/trickstercache/trickster/v2/pkg/observability/tracing/options"
 	rwopts "github.com/trickstercache/trickster/v2/pkg/proxy/request/rewriter/options"
 	to "github.com/trickstercache/trickster/v2/pkg/proxy/tls/options"
+	"github.com/trickstercache/trickster/v2/pkg/util/yamlx"
+	trickstercachev1alpha1 "go.openviz.dev/trickster-config/api/v1alpha1"
 	core "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
-	kmapi "kmodules.xyz/client-go/api/v1"
-	au "kmodules.xyz/client-go/client/apiutil"
-
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/yaml"
 )
 
 func NewClient() (client.Client, error) {
 	scheme := runtime.NewScheme()
 	_ = clientgoscheme.AddToScheme(scheme)
+	_ = trickstercachev1alpha1.AddToScheme(scheme)
 
 	ctrl.SetLogger(klogr.New())
 	cfg := ctrl.GetConfigOrDie()
@@ -160,7 +169,7 @@ func main_gen_cfg() {
 	}
 }
 
-func main() {
+func main_test_conn() {
 	/*
 		1-a374b4a1-04e2-4164-b268-4f4799f697ed   36d
 		1-be34d9c6-74eb-4bfe-bf22-f57c0065b713   36d
@@ -197,7 +206,7 @@ func main() {
 
 	res, err := getPromQueryResult(pc2, promCPUQuery)
 	if err != nil {
-		log.Fatalf("failed to get prometheus cpu query result, reason: %v", err)
+		klog.Fatalf("failed to get prometheus cpu query result, reason: %v", err)
 	}
 	data, _ := json.MarshalIndent(res, "", "  ")
 	fmt.Println(string(data))
@@ -209,7 +218,7 @@ func getPromQueryResult(pc promv1.API, promQuery string) (map[string]float64, er
 		return nil, err
 	}
 	if warn != nil {
-		log.Println("Warning: ", warn)
+		klog.Infoln("Warning: ", warn)
 	}
 
 	metrics := strings.Split(val.String(), "\n")
@@ -239,46 +248,6 @@ func getPromQueryResult(pc promv1.API, promQuery string) (map[string]float64, er
 
 	return metricsMap, nil
 }
-
-func useKubebuilderClient() error {
-	fmt.Println("Using kubebuilder client")
-	kc, err := NewClient()
-	if err != nil {
-		return err
-	}
-
-	var list core.PodList
-	err = kc.List(context.TODO(), &list)
-	if err != nil {
-		return err
-	}
-	for _, db := range list.Items {
-		fmt.Println(client.ObjectKeyFromObject(&db))
-	}
-	images := map[string]kmapi.ImageInfo{}
-	for _, pod := range list.Items {
-		images, err = au.CollectImageInfo(kc, &pod, images)
-		if err != nil {
-			return err
-		}
-	}
-
-	data, err := yaml.Marshal(images)
-	if err != nil {
-		return err
-	}
-	fmt.Println(string(data))
-
-	return nil
-}
-
-var __tmpDir = func() string {
-	dir, err := os.MkdirTemp("/tmp", "prometheus-*")
-	if err != nil {
-		panic(err)
-	}
-	return dir
-}()
 
 type ServiceReference struct {
 	Scheme    string
@@ -338,7 +307,331 @@ func prepConfig(cfg *rest.Config, ref ServiceReference) (*prometheus.Config, err
 	}, nil
 }
 
-func TC() (*config.Config, error) {
-	tc := config.Config{}
-	return &tc, nil
+func main() {
+	if err := genCRDConfig(); err != nil {
+		panic(err)
+	}
+}
+
+func genCRDConfig() error {
+	kc, err := NewClient()
+	if err != nil {
+		return err
+	}
+
+	r := &TricksterReconciler{
+		Client: kc,
+		Scheme: kc.Scheme(),
+		Fn: func(nc *config.Config) error {
+			yml, err := yaml.Marshal(nc)
+			if err != nil {
+				return err
+			}
+			md, err := yamlx.GetKeyList(string(yml))
+			if err != nil {
+				nc.SetDefaults(yamlx.KeyLookup{})
+				return err
+			}
+			err = nc.SetDefaults(md)
+			if err != nil {
+				return err
+				// nc.Main.configFilePath = flags.ConfigPath
+				// c.Main.configLastModified = c.CheckFileLastModified()
+			}
+			// reloadFF(nc, conf, log, wg, caches, args)
+			return nil
+		},
+	}
+	_, err = r.Reconcile(context.TODO(), ctrl.Request{
+		NamespacedName: types.NamespacedName{
+			Namespace: "bb",
+			Name:      "bytebuilders",
+		},
+	})
+	return err
+}
+
+// const configDir = "/tmp/trickster"
+var configDir = func() string {
+	d, _ := os.Getwd()
+	return d
+}()
+
+// TricksterReconciler reconciles a Trickster object
+type TricksterReconciler struct {
+	client.Client
+	Scheme *runtime.Scheme
+	Fn     func(cfg *config.Config) error
+}
+
+//+kubebuilder:rbac:groups=trickstercache.org,resources=tricksters,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=trickstercache.org,resources=tricksters/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=trickstercache.org,resources=tricksters/finalizers,verbs=update
+
+// Reconcile is part of the main kubernetes reconciliation loop which aims to
+// move the current state of the cluster closer to the desired state.
+// TODO(user): Modify the Reconcile function to compare the state specified by
+// the Trickster object against the actual cluster state, and then
+// perform operations to make the cluster state reflect the state specified by
+// the user.
+//
+// For more details, check Reconcile and its Result here:
+// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.1/pkg/reconcile
+func (r *TricksterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+
+	var trickster trickstercachev1alpha1.Trickster
+	if err := r.Get(ctx, req.NamespacedName, &trickster); err != nil {
+		log.Error(err, "unable to fetch Trickster")
+		// we'll ignore not-found errors, since they can't be fixed by an immediate
+		// requeue (we'll need to wait for a new notification), and we can get them
+		// on deleted requests.
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	var cfg config.Config
+	if trickster.Spec.Main != nil {
+		cfg.Main = trickster.Spec.Main
+	}
+	if trickster.Spec.Nats != nil {
+		cfg.Nats = trickster.Spec.Nats
+	}
+	if trickster.Spec.Secret != nil {
+		err := r.writeConfig(ctx, req.Namespace, trickster.Spec.Secret)
+		if err != nil {
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
+	}
+	if trickster.Spec.Frontend != nil {
+		cfg.Frontend = trickster.Spec.Frontend
+	}
+	if trickster.Spec.Logging != nil {
+		cfg.Logging = trickster.Spec.Logging
+	}
+	if trickster.Spec.Metrics != nil {
+		cfg.Metrics = trickster.Spec.Metrics
+	}
+	if trickster.Spec.NegativeCacheConfigs != nil {
+		cfg.NegativeCacheConfigs = trickster.Spec.NegativeCacheConfigs
+	}
+	if trickster.Spec.ReloadConfig != nil {
+		cfg.ReloadConfig = trickster.Spec.ReloadConfig
+	}
+	{
+		var list trickstercachev1alpha1.TricksterBackendList
+		sel := labels.Everything()
+		if trickster.Spec.BackendSelector != nil {
+			var err error
+			sel, err = metav1.LabelSelectorAsSelector(trickster.Spec.BackendSelector)
+			if err != nil {
+				return ctrl.Result{}, client.IgnoreNotFound(err)
+			}
+		}
+		if err := r.List(context.Background(), &list, client.InNamespace(req.Namespace), client.MatchingLabelsSelector{Selector: sel}); err != nil {
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
+		cfg.Backends = make(map[string]*bo.Options, len(list.Items))
+		for _, item := range list.Items {
+			if item.Spec.Secret != nil {
+				err := r.writeConfig(ctx, req.Namespace, item.Spec.Secret)
+				if err != nil {
+					return ctrl.Result{}, client.IgnoreNotFound(err)
+				}
+			}
+			cfg.Backends[item.Name] = &item.Spec.Options
+		}
+	}
+	{
+		var list trickstercachev1alpha1.TricksterCacheList
+		sel := labels.Everything()
+		if trickster.Spec.CacheSelector != nil {
+			var err error
+			sel, err = metav1.LabelSelectorAsSelector(trickster.Spec.CacheSelector)
+			if err != nil {
+				return ctrl.Result{}, client.IgnoreNotFound(err)
+			}
+		}
+		if err := r.List(context.Background(), &list, client.InNamespace(req.Namespace), client.MatchingLabelsSelector{Selector: sel}); err != nil {
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
+		if cfg.Caches == nil {
+			cfg.Caches = make(map[string]*cache.Options, len(list.Items))
+		}
+		for _, item := range list.Items {
+			if item.Spec.Secret != nil {
+				err := r.writeConfig(ctx, req.Namespace, item.Spec.Secret)
+				if err != nil {
+					return ctrl.Result{}, client.IgnoreNotFound(err)
+				}
+			}
+			cfg.Caches[item.Name] = &item.Spec.Options
+		}
+	}
+	{
+		var list trickstercachev1alpha1.TricksterRequestRewriterList
+		sel := labels.Everything()
+		if trickster.Spec.RequestRewriterSelector != nil {
+			var err error
+			sel, err = metav1.LabelSelectorAsSelector(trickster.Spec.RequestRewriterSelector)
+			if err != nil {
+				return ctrl.Result{}, client.IgnoreNotFound(err)
+			}
+		}
+		if err := r.List(context.Background(), &list, client.InNamespace(req.Namespace), client.MatchingLabelsSelector{Selector: sel}); err != nil {
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
+		if cfg.RequestRewriters == nil {
+			cfg.RequestRewriters = make(map[string]*rwopts.Options, len(list.Items))
+		}
+		for _, item := range list.Items {
+			cfg.RequestRewriters[item.Name] = &item.Spec.Options
+		}
+	}
+	{
+		var list trickstercachev1alpha1.TricksterRuleList
+		sel := labels.Everything()
+		if trickster.Spec.RuleSelector != nil {
+			var err error
+			sel, err = metav1.LabelSelectorAsSelector(trickster.Spec.RuleSelector)
+			if err != nil {
+				return ctrl.Result{}, client.IgnoreNotFound(err)
+			}
+		}
+		if err := r.List(context.Background(), &list, client.InNamespace(req.Namespace), client.MatchingLabelsSelector{Selector: sel}); err != nil {
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
+		if cfg.Rules == nil {
+			cfg.Rules = make(map[string]*rule.Options, len(list.Items))
+		}
+		for _, item := range list.Items {
+			cfg.Rules[item.Name] = &item.Spec.Options
+		}
+	}
+	{
+		var list trickstercachev1alpha1.TricksterTracingConfigList
+		sel := labels.Everything()
+		if trickster.Spec.TracingConfigSelector != nil {
+			var err error
+			sel, err = metav1.LabelSelectorAsSelector(trickster.Spec.TracingConfigSelector)
+			if err != nil {
+				return ctrl.Result{}, client.IgnoreNotFound(err)
+			}
+		}
+		if err := r.List(context.Background(), &list, client.InNamespace(req.Namespace), client.MatchingLabelsSelector{Selector: sel}); err != nil {
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
+		if cfg.TracingConfigs == nil {
+			cfg.TracingConfigs = make(map[string]*tracing.Options, len(list.Items))
+		}
+		for _, item := range list.Items {
+			if item.Spec.Secret != nil {
+				err := r.writeConfig(ctx, req.Namespace, item.Spec.Secret)
+				if err != nil {
+					return ctrl.Result{}, client.IgnoreNotFound(err)
+				}
+			}
+			cfg.TracingConfigs[item.Name] = &item.Spec.Options
+		}
+	}
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	fmt.Println("-------------------------")
+	fmt.Println(string(data))
+	fmt.Println("-------------------------")
+	yml := string(data)
+
+	c, err := LoadConfig(yml)
+	if err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	data2, err := yaml.Marshal(c)
+	if err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	fmt.Println("-------------------------")
+	fmt.Println(string(data2))
+	fmt.Println("-------------------------")
+
+	// if err := r.Fn(cfg); err != nil {
+	//	return ctrl.Result{}, client.IgnoreNotFound(err)
+	//}
+
+	return ctrl.Result{}, nil
+}
+
+func LoadConfig(yml string) (*config.Config, error) {
+	c := config.NewConfig()
+	err := yaml.Unmarshal([]byte(yml), &c)
+	if err != nil {
+		return nil, err
+	}
+	md, err := yamlx.GetKeyList(yml)
+	if err != nil {
+		c.SetDefaults(yamlx.KeyLookup{})
+		return nil, err
+	}
+	err = c.SetDefaults(md)
+	//if err == nil {
+	//	c.Main.configFilePath = flags.ConfigPath
+	//	c.Main.configLastModified = c.CheckFileLastModified()
+	//}
+
+	// set the default origin url from the flags
+	if d, ok := c.Backends["default"]; ok {
+		// If the user has configured their own backends, and one of them is not "default"
+		// then Trickster will not use the auto-created default backend
+		if d.OriginURL == "" {
+			delete(c.Backends, "default")
+		}
+	}
+
+	if len(c.Backends) == 0 {
+		return nil, errors.New("no valid backends configured")
+	}
+
+	ncl, err := negative.ConfigLookup(c.NegativeCacheConfigs).Validate()
+	if err != nil {
+		return nil, err
+	}
+
+	err = bo.Lookup(c.Backends).Validate(ncl)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, c := range c.Caches {
+		c.Index.FlushInterval = time.Duration(c.Index.FlushIntervalMS) * time.Millisecond
+		c.Index.ReapInterval = time.Duration(c.Index.ReapIntervalMS) * time.Millisecond
+	}
+
+	err = validate.ValidateConfig(c)
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+func (r *TricksterReconciler) writeConfig(ctx context.Context, ns string, sp *core.SecretProjection) error {
+	var secret core.Secret
+	err := r.Get(ctx, client.ObjectKey{Namespace: ns, Name: sp.Name}, &secret)
+	if err != nil {
+		return err
+	}
+	for _, item := range sp.Items {
+		path := item.Path
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(configDir, path)
+		}
+		err = os.MkdirAll(filepath.Dir(path), 0755)
+		if err != nil {
+			return err
+		}
+		err = os.WriteFile(path, secret.Data[item.Key], 0644)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
