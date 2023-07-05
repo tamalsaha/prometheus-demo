@@ -176,7 +176,10 @@ func main() {
 	*/
 	pc, err := promapi.NewClient(promapi.Config{
 		// Address: "http://127.0.0.1:9090/" + "1-be34d9c6-74eb-4bfe-bf22-f57c0065b713",
-		Address: "https://trickster.appscode.ninja/" + "1-be34d9c6-74eb-4bfe-bf22-f57c0065b713",
+		// Address: "https://trickster.appscode.ninja/" + "1-ce471d1a-80e3-4998-b7b5-912dc49afaf0",
+		// Address: "http://127.0.0.1:3000/" + "1-ce471d1a-80e3-4998-b7b5-912dc49afaf0",
+
+		Address: "https://565c-98-167-94-29.ngrok-free.app/" + "1-ce471d1a-80e3-4998-b7b5-912dc49afaf0",
 		Client:  http.DefaultClient,
 	})
 	if err != nil {
@@ -203,7 +206,7 @@ func main() {
 
 	pc2 := promv1.NewAPI(pc)
 
-	promCPUQuery := `up`
+	promCPUQuery := `kubedb_com_mongodb_status_phase{namespace=~"demo"}`
 
 	res, err := getPromQueryResult(pc2, promCPUQuery)
 	if err != nil {

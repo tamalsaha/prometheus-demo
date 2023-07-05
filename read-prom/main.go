@@ -70,9 +70,9 @@ func ToPrometheusConfig(cfg *rest.Config, ref ServiceReference) (*prometheus.Con
 		BearerTokenFile: cfg.BearerTokenFile,
 		ProxyURL:        "",
 		TLSConfig: prom_config.TLSConfig{
-			CAFile:             caFile,
-			CertFile:           certFile,
-			KeyFile:            keyFile,
+			CAFile: caFile,
+			// CertFile:           certFile,
+			// KeyFile:            keyFile,
 			ServerName:         cfg.TLSClientConfig.ServerName,
 			InsecureSkipVerify: cfg.TLSClientConfig.Insecure,
 		},
