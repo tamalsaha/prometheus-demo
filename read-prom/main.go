@@ -4,6 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
+	kutil "kmodules.xyz/client-go"
 	"log"
 	"os"
 	"path/filepath"
@@ -33,6 +39,52 @@ type ServiceReference struct {
 	Name      string
 	Namespace string
 	Port      int
+}
+
+func ToPrometheusConfigFromServiceAccount(cfg *rest.Config, sa types.NamespacedName, ref ServiceReference) (*prometheus.Config, error) {
+	kc, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	var caData, tokenData []byte
+	err = wait.PollImmediate(kutil.RetryInterval, kutil.RetryTimeout, func() (done bool, err error) {
+		secret, err := kc.CoreV1().Secrets(sa.Namespace).Get(context.TODO(), sa.Name, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		} else if err != nil {
+			return false, err
+		}
+
+		var caFound, tokenFound bool
+		caData, caFound = secret.Data["ca.crt"]
+		tokenData, tokenFound = secret.Data["token"]
+		return caFound && tokenFound, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	certDir, err := os.MkdirTemp(os.TempDir(), "prometheus-*")
+	if err != nil {
+		return nil, err
+	}
+
+	caFile := filepath.Join(certDir, "ca.crt")
+	if err := os.WriteFile(caFile, caData, 0o644); err != nil {
+		return nil, err
+	}
+
+	return &prometheus.Config{
+		Addr:        fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:%s:%d/proxy/", cfg.Host, ref.Namespace, ref.Scheme, ref.Name, ref.Port),
+		BearerToken: string(tokenData),
+		ProxyURL:    "",
+		TLSConfig: prom_config.TLSConfig{
+			CAFile:             caFile,
+			ServerName:         cfg.TLSClientConfig.ServerName,
+			InsecureSkipVerify: cfg.TLSClientConfig.Insecure,
+		},
+	}, nil
 }
 
 func ToPrometheusConfig(cfg *rest.Config, ref ServiceReference) (*prometheus.Config, error) {
@@ -91,12 +143,23 @@ func main() {
 	//data2, err := rw.DoRaw(context.TODO())
 	//fmt.Println(string(data2))
 
-	promConfig, err := ToPrometheusConfig(cfg, ServiceReference{
-		Scheme:    "http",
-		Name:      "kube-prometheus-stack-prometheus",
-		Namespace: "monitoring",
-		Port:      9090,
-	})
+	//promConfig, err := ToPrometheusConfig(cfg, ServiceReference{
+	//	Scheme:    "http",
+	//	Name:      "kube-prometheus-stack-prometheus",
+	//	Namespace: "monitoring",
+	//	Port:      9090,
+	//})
+	promConfig, err := ToPrometheusConfigFromServiceAccount(cfg,
+		types.NamespacedName{
+			Namespace: "default",
+			Name:      "trickster",
+		},
+		ServiceReference{
+			Scheme:    "http",
+			Name:      "kube-prometheus-stack-prometheus",
+			Namespace: "monitoring",
+			Port:      9090,
+		})
 	pc, err := promConfig.NewPrometheusClient()
 	if err != nil {
 		panic(err)

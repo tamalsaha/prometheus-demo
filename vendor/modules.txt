@@ -722,6 +722,9 @@ k8s.io/utils/net
 k8s.io/utils/pointer
 k8s.io/utils/strings/slices
 k8s.io/utils/trace
+# kmodules.xyz/client-go v0.25.21
+## explicit; go 1.18
+kmodules.xyz/client-go
 # kubeops.dev/cluster-connector v0.0.5
 ## explicit; go 1.18
 kubeops.dev/cluster-connector/pkg/shared

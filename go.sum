@@ -768,6 +768,8 @@ k8s.io/kube-openapi v0.0.0-20220803164354-a70c9af30aea h1:3QOH5+2fGsY8e1qf+GIFpg
 k8s.io/kube-openapi v0.0.0-20220803164354-a70c9af30aea/go.mod h1:C/N6wCaBHeBHkHUesQOQy2/MZqGgMAFPqGsGQLdbZBU=
 k8s.io/utils v0.0.0-20221108210102-8e77b1f39fe2 h1:GfD9OzL11kvZN5iArC6oTS7RTj7oJOIfnislxYlqTj8=
 k8s.io/utils v0.0.0-20221108210102-8e77b1f39fe2/go.mod h1:OLgZIPagt7ERELqWJFomSt595RzquPNLL48iOWgYOg0=
+kmodules.xyz/client-go v0.25.21 h1:AMceuEeOl4hoh4p3rtGcrcrbwHg9j5IpnHTUd4vjecc=
+kmodules.xyz/client-go v0.25.21/go.mod h1:KWVpgjAj/VNzCzj/BihpJkY39aWIqe8qMp5RuPsuSJA=
 kubeops.dev/cluster-connector v0.0.5 h1:PFiu0BqfGpUDGzL1w62ybKdOV9hlFKJFBwoMD5A+1So=
 kubeops.dev/cluster-connector v0.0.5/go.mod h1:TY6PPe8xT3Sty3e2ElFdT1uoPuatP2VWSXnSb4z39nk=
 rsc.io/binaryregexp v0.2.0/go.mod h1:qTv7/COck+e2FymRvadv62gMdZztPaShugOCi3I+8D8=
