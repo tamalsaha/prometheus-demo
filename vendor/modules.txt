@@ -402,8 +402,8 @@ golang.org/x/time/rate
 # gomodules.xyz/cert v1.5.0
 ## explicit; go 1.17
 gomodules.xyz/cert
-# gomodules.xyz/jsonpatch/v2 v2.2.0
-## explicit; go 1.12
+# gomodules.xyz/jsonpatch/v2 v2.3.0
+## explicit; go 1.20
 gomodules.xyz/jsonpatch/v2
 # google.golang.org/appengine v1.6.7
 ## explicit; go 1.11
@@ -722,7 +722,7 @@ k8s.io/utils/net
 k8s.io/utils/pointer
 k8s.io/utils/strings/slices
 k8s.io/utils/trace
-# kmodules.xyz/client-go v0.25.21
+# kmodules.xyz/client-go v0.25.27
 ## explicit; go 1.18
 kmodules.xyz/client-go
 # kubeops.dev/cluster-connector v0.0.5
