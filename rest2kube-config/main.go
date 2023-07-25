@@ -24,6 +24,7 @@ func main() {
 	fmt.Println(string(data))
 }
 
+// https://github.com/kubernetes/client-go/issues/711#issuecomment-730112049
 func GenerateKubeConfiguration(cfg *rest.Config, namespace string) ([]byte, error) {
 	if err := rest.LoadTLSFiles(cfg); err != nil {
 		return nil, err
