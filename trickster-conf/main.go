@@ -179,7 +179,7 @@ func main() {
 		// Address: "https://trickster.appscode.ninja/" + "1-ce471d1a-80e3-4998-b7b5-912dc49afaf0",
 		// Address: "http://127.0.0.1:3000/" + "1-ce471d1a-80e3-4998-b7b5-912dc49afaf0",
 
-		Address: "https://565c-98-167-94-29.ngrok-free.app/" + "1-ce471d1a-80e3-4998-b7b5-912dc49afaf0",
+		Address: "http://localhost:9090/2.42536768-fac2-4403-aa23-2a3092ffa6c9",
 		Client:  http.DefaultClient,
 	})
 	if err != nil {
@@ -206,7 +206,7 @@ func main() {
 
 	pc2 := promv1.NewAPI(pc)
 
-	promCPUQuery := `kubedb_com_mongodb_status_phase{namespace=~"demo"}`
+	promCPUQuery := `pg_settings_array_nulls`
 
 	res, err := getPromQueryResult(pc2, promCPUQuery)
 	if err != nil {
