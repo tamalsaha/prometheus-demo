@@ -39,7 +39,6 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/klogr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -52,12 +51,16 @@ func NewClient() (client.Client, error) {
 	_ = clientgoscheme.AddToScheme(scheme)
 	_ = trickstercachev1alpha1.AddToScheme(scheme)
 
-	ctrl.SetLogger(klogr.New())
+	ctrl.SetLogger(klog.NewKlogr())
 	cfg := ctrl.GetConfigOrDie()
 	cfg.QPS = 100
 	cfg.Burst = 100
 
-	mapper, err := apiutil.NewDynamicRESTMapper(cfg)
+	hc, err := rest.HTTPClientFor(cfg)
+	if err != nil {
+		return nil, err
+	}
+	mapper, err := apiutil.NewDynamicRESTMapper(cfg, hc)
 	if err != nil {
 		return nil, err
 	}
@@ -174,12 +177,16 @@ func main() {
 		1-a374b4a1-04e2-4164-b268-4f4799f697ed   36d
 		1-be34d9c6-74eb-4bfe-bf22-f57c0065b713   36d
 	*/
+
 	pc, err := promapi.NewClient(promapi.Config{
 		// Address: "http://127.0.0.1:9090/" + "1-be34d9c6-74eb-4bfe-bf22-f57c0065b713",
 		// Address: "https://trickster.appscode.ninja/" + "1-ce471d1a-80e3-4998-b7b5-912dc49afaf0",
 		// Address: "http://127.0.0.1:3000/" + "1-ce471d1a-80e3-4998-b7b5-912dc49afaf0",
 
-		Address: "http://localhost:9090/2.42536768-fac2-4403-aa23-2a3092ffa6c9",
+		// Address: "http://localhost:9090/2.42536768-fac2-4403-aa23-2a3092ffa6c9",
+		// Address: "https://172.233.230.15/prometheus/2.42536768-fac2-4403-aa23-2a3092ffa6c9",
+
+		Address: "http://localhost:9090/2.39425934-93cc-4776-be30-1614b52924f4",
 		Client:  http.DefaultClient,
 	})
 	if err != nil {
@@ -204,9 +211,23 @@ func main() {
 		}
 	*/
 
+	/*
+		cfg := prometheus.Config{
+			Addr:        "https://172.233.230.15/prometheus/1.0e5f7deb-377f-476e-9ee2-280ff24bb7db",
+			BearerToken: "2f4c069e7601e9fb7507d5b165f638313eb8530f",
+			//TLSConfig: prom_config.TLSConfig{
+			//	InsecureSkipVerify: true,
+			//},
+		}
+		pc, err = cfg.NewPrometheusClient()
+		if err != nil {
+			panic(err)
+		}
+	*/
+
 	pc2 := promv1.NewAPI(pc)
 
-	promCPUQuery := `pg_settings_array_nulls`
+	promCPUQuery := `up`
 
 	res, err := getPromQueryResult(pc2, promCPUQuery)
 	if err != nil {

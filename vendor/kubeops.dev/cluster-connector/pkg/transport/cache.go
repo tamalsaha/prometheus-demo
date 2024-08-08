@@ -47,6 +47,7 @@ type tlsCacheKey struct {
 	certFile           string
 	keyFile            string
 	serverName         string
+	linkID             string
 	nextProtos         string
 	disableCompression bool
 }
@@ -60,7 +61,7 @@ func (t tlsCacheKey) String() string {
 }
 
 func (c *tlsTransportCache) get(config *transport.Config, nc *nats.Conn, names shared.SubjectNames, timeout time.Duration) (http.RoundTripper, error) {
-	key, canCache, err := tlsConfigKey(config)
+	key, canCache, err := tlsConfigKey(config, names)
 	if err != nil {
 		return nil, err
 	}
@@ -103,13 +104,13 @@ func (c *tlsTransportCache) get(config *transport.Config, nc *nats.Conn, names s
 }
 
 // tlsConfigKey returns a unique key for tls.Config objects returned from TLSConfigFor
-func tlsConfigKey(c *transport.Config) (tlsCacheKey, bool, error) {
+func tlsConfigKey(c *transport.Config, names shared.SubjectNames) (tlsCacheKey, bool, error) {
 	// Make sure ca/key/cert content is loaded
 	if err := loadTLSFiles(c); err != nil {
 		return tlsCacheKey{}, false, err
 	}
 
-	if c.TLS.GetCert != nil || c.Dial != nil || c.Proxy != nil {
+	if c.Proxy != nil {
 		// cannot determine equality for functions
 		return tlsCacheKey{}, false, nil
 	}
@@ -118,6 +119,7 @@ func tlsConfigKey(c *transport.Config) (tlsCacheKey, bool, error) {
 		insecure:           c.TLS.Insecure,
 		caData:             string(c.TLS.CAData),
 		serverName:         c.TLS.ServerName,
+		linkID:             names.GetLinkID(),
 		nextProtos:         strings.Join(c.TLS.NextProtos, ","),
 		disableCompression: c.DisableCompression,
 	}

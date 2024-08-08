@@ -27,6 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/nats-io/nats.go/internal/parser"
 	"github.com/nats-io/nuid"
 )
 
@@ -226,13 +227,16 @@ type js struct {
 	opts *jsOpts
 
 	// For async publish context.
-	mu   sync.RWMutex
-	rpre string
-	rsub *Subscription
-	pafs map[string]*pubAckFuture
-	stc  chan struct{}
-	dch  chan struct{}
-	rr   *rand.Rand
+	mu             sync.RWMutex
+	rpre           string
+	rsub           *Subscription
+	pafs           map[string]*pubAckFuture
+	stc            chan struct{}
+	dch            chan struct{}
+	rr             *rand.Rand
+	connStatusCh   chan (Status)
+	replyPrefix    string
+	replyPrefixLen int
 }
 
 type jsOpts struct {
@@ -281,6 +285,12 @@ func (nc *Conn) JetStream(opts ...JSOpt) (JetStreamContext, error) {
 			maxpa: defaultAsyncPubAckInflight,
 		},
 	}
+	inboxPrefix := InboxPrefix
+	if js.nc.Opts.InboxPrefix != _EMPTY_ {
+		inboxPrefix = js.nc.Opts.InboxPrefix + "."
+	}
+	js.replyPrefix = inboxPrefix
+	js.replyPrefixLen = len(js.replyPrefix) + aReplyTokensize + 1
 
 	for _, opt := range opts {
 		if err := opt.configureJSContext(js.opts); err != nil {
@@ -394,7 +404,7 @@ func DirectGetNext(subject string) JSOpt {
 }
 
 // StreamListFilter is an option that can be used to configure `StreamsInfo()` and `StreamNames()` requests.
-// It allows filtering the retured streams by subject associated with each stream.
+// It allows filtering the returned streams by subject associated with each stream.
 // Wildcards can be used. For example, `StreamListFilter(FOO.*.A) will return
 // all streams which have at least one subject matching the provided pattern (e.g. FOO.TEST.A).
 func StreamListFilter(subject string) JSOpt {
@@ -535,7 +545,7 @@ func (js *js) PublishMsg(m *Msg, opts ...PubOpt) (*PubAck, error) {
 	}
 
 	if err != nil {
-		for r, ttl := 0, o.ttl; err == ErrNoResponders && (r < o.rnum || o.rnum < 0); r++ {
+		for r, ttl := 0, o.ttl; errors.Is(err, ErrNoResponders) && (r < o.rnum || o.rnum < 0); r++ {
 			// To protect against small blips in leadership changes etc, if we get a no responders here retry.
 			if o.ctx != nil {
 				select {
@@ -557,7 +567,7 @@ func (js *js) PublishMsg(m *Msg, opts ...PubOpt) (*PubAck, error) {
 			}
 		}
 		if err != nil {
-			if err == ErrNoResponders {
+			if errors.Is(err, ErrNoResponders) {
 				err = ErrNoStreamResponse
 			}
 			return nil, err
@@ -639,7 +649,6 @@ func (paf *pubAckFuture) Msg() *Msg {
 }
 
 // For quick token lookup etc.
-const aReplyPreLen = 14
 const aReplyTokensize = 6
 
 func (js *js) newAsyncReply() string {
@@ -652,11 +661,7 @@ func (js *js) newAsyncReply() string {
 		for i := 0; i < aReplyTokensize; i++ {
 			b[i] = rdigits[int(b[i]%base)]
 		}
-		inboxPrefix := InboxPrefix
-		if js.nc.Opts.InboxPrefix != _EMPTY_ {
-			inboxPrefix = js.nc.Opts.InboxPrefix + "."
-		}
-		js.rpre = fmt.Sprintf("%s%s.", inboxPrefix, b[:aReplyTokensize])
+		js.rpre = fmt.Sprintf("%s%s.", js.replyPrefix, b[:aReplyTokensize])
 		sub, err := js.nc.Subscribe(fmt.Sprintf("%s*", js.rpre), js.handleAsyncReply)
 		if err != nil {
 			js.mu.Unlock()
@@ -664,6 +669,10 @@ func (js *js) newAsyncReply() string {
 		}
 		js.rsub = sub
 		js.rr = rand.New(rand.NewSource(time.Now().UnixNano()))
+	}
+	if js.connStatusCh == nil {
+		js.connStatusCh = js.nc.StatusChanged(RECONNECTING, CLOSED)
+		go js.resetPendingAcksOnReconnect()
 	}
 	var sb strings.Builder
 	sb.WriteString(js.rpre)
@@ -676,6 +685,41 @@ func (js *js) newAsyncReply() string {
 	sb.Write(b[:])
 	js.mu.Unlock()
 	return sb.String()
+}
+
+func (js *js) resetPendingAcksOnReconnect() {
+	js.mu.Lock()
+	connStatusCh := js.connStatusCh
+	js.mu.Unlock()
+	for {
+		newStatus, ok := <-connStatusCh
+		if !ok || newStatus == CLOSED {
+			return
+		}
+		js.mu.Lock()
+		for _, paf := range js.pafs {
+			paf.err = ErrDisconnected
+		}
+		js.pafs = nil
+		if js.dch != nil {
+			close(js.dch)
+			js.dch = nil
+		}
+		js.mu.Unlock()
+	}
+}
+
+func (js *js) cleanupReplySub() {
+	js.mu.Lock()
+	if js.rsub != nil {
+		js.rsub.Unsubscribe()
+		js.rsub = nil
+	}
+	if js.connStatusCh != nil {
+		close(js.connStatusCh)
+		js.connStatusCh = nil
+	}
+	js.mu.Unlock()
 }
 
 // registerPAF will register for a PubAckFuture.
@@ -726,10 +770,10 @@ func (js *js) asyncStall() <-chan struct{} {
 
 // Handle an async reply from PublishAsync.
 func (js *js) handleAsyncReply(m *Msg) {
-	if len(m.Subject) <= aReplyPreLen {
+	if len(m.Subject) <= js.replyPrefixLen {
 		return
 	}
-	id := m.Subject[aReplyPreLen:]
+	id := m.Subject[js.replyPrefixLen:]
 
 	js.mu.Lock()
 	paf := js.getPAF(id)
@@ -875,7 +919,7 @@ func (js *js) PublishMsgAsync(m *Msg, opts ...PubOpt) (PubAckFuture, error) {
 		return nil, errors.New("nats: error creating async reply handler")
 	}
 
-	id := m.Reply[aReplyPreLen:]
+	id := m.Reply[js.replyPrefixLen:]
 	paf := &pubAckFuture{msg: m, st: time.Now()}
 	numPending, maxPending := js.registerPAF(id, paf)
 
@@ -1077,6 +1121,7 @@ type ConsumerConfig struct {
 	MaxDeliver      int             `json:"max_deliver,omitempty"`
 	BackOff         []time.Duration `json:"backoff,omitempty"`
 	FilterSubject   string          `json:"filter_subject,omitempty"`
+	FilterSubjects  []string        `json:"filter_subjects,omitempty"`
 	ReplayPolicy    ReplayPolicy    `json:"replay_policy"`
 	RateLimit       uint64          `json:"rate_limit_bps,omitempty"` // Bits per sec
 	SampleFrequency string          `json:"sample_freq,omitempty"`
@@ -1102,6 +1147,11 @@ type ConsumerConfig struct {
 	Replicas int `json:"num_replicas"`
 	// Force memory storage.
 	MemoryStorage bool `json:"mem_storage,omitempty"`
+
+	// Metadata is additional metadata for the Consumer.
+	// Keys starting with `_nats` are reserved.
+	// NOTE: Metadata requires nats-server v2.10.0+
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // ConsumerInfo is the info from a JetStream consumer.
@@ -1135,10 +1185,11 @@ type SequencePair struct {
 
 // nextRequest is for getting next messages for pull based consumers from JetStream.
 type nextRequest struct {
-	Expires  time.Duration `json:"expires,omitempty"`
-	Batch    int           `json:"batch,omitempty"`
-	NoWait   bool          `json:"no_wait,omitempty"`
-	MaxBytes int           `json:"max_bytes,omitempty"`
+	Expires   time.Duration `json:"expires,omitempty"`
+	Batch     int           `json:"batch,omitempty"`
+	NoWait    bool          `json:"no_wait,omitempty"`
+	MaxBytes  int           `json:"max_bytes,omitempty"`
+	Heartbeat time.Duration `json:"idle_heartbeat,omitempty"`
 }
 
 // jsSub includes JetStream subscription info.
@@ -1190,6 +1241,10 @@ func (sub *Subscription) deleteConsumer() error {
 	sub.mu.Lock()
 	jsi := sub.jsi
 	if jsi == nil {
+		sub.mu.Unlock()
+		return nil
+	}
+	if jsi.stream == _EMPTY_ || jsi.consumer == _EMPTY_ {
 		sub.mu.Unlock()
 		return nil
 	}
@@ -1342,7 +1397,7 @@ func processConsInfo(info *ConsumerInfo, userCfg *ConsumerConfig, isPullMode boo
 }
 
 func checkConfig(s, u *ConsumerConfig) error {
-	makeErr := func(fieldName string, usrVal, srvVal interface{}) error {
+	makeErr := func(fieldName string, usrVal, srvVal any) error {
 		return fmt.Errorf("configuration requests %s to be %v, but consumer's value is %v", fieldName, usrVal, srvVal)
 	}
 
@@ -1468,6 +1523,7 @@ func (js *js) subscribe(subj, queue string, cb MsgHandler, ch chan *Msg, isSync,
 		isDurable     = o.cfg.Durable != _EMPTY_
 		consumerBound = o.bound
 		ctx           = o.ctx
+		skipCInfo     = o.skipCInfo
 		notFoundErr   bool
 		lookupErr     bool
 		nc            = js.nc
@@ -1541,11 +1597,11 @@ func (js *js) subscribe(subj, queue string, cb MsgHandler, ch chan *Msg, isSync,
 
 	// With an explicit durable name, we can lookup the consumer first
 	// to which it should be attaching to.
-	// If bind to ordered consumer is true, skip the lookup.
-	if consumer != _EMPTY_ {
+	// If SkipConsumerLookup was used, do not call consumer info.
+	if consumer != _EMPTY_ && !o.skipCInfo {
 		info, err = js.ConsumerInfo(stream, consumer)
 		notFoundErr = errors.Is(err, ErrConsumerNotFound)
-		lookupErr = err == ErrJetStreamNotEnabled || err == ErrTimeout || err == context.DeadlineExceeded
+		lookupErr = err == ErrJetStreamNotEnabled || errors.Is(err, ErrTimeout) || errors.Is(err, context.DeadlineExceeded)
 	}
 
 	switch {
@@ -1563,6 +1619,19 @@ func (js *js) subscribe(subj, queue string, cb MsgHandler, ch chan *Msg, isSync,
 		if !(isPullMode && lookupErr && consumerBound) {
 			return nil, err
 		}
+	case skipCInfo:
+		// When skipping consumer info, need to rely on the manually passed sub options
+		// to match the expected behavior from the subscription.
+		hasFC, hbi = o.cfg.FlowControl, o.cfg.Heartbeat
+		hasHeartbeats = hbi > 0
+		maxap = o.cfg.MaxAckPending
+		deliver = o.cfg.DeliverSubject
+		if consumerBound {
+			break
+		}
+
+		// When not bound to a consumer already, proceed to create.
+		fallthrough
 	default:
 		// Attempt to create consumer if not found nor using Bind.
 		shouldCreate = true
@@ -1572,7 +1641,6 @@ func (js *js) subscribe(subj, queue string, cb MsgHandler, ch chan *Msg, isSync,
 			deliver = nc.NewInbox()
 			cfg.DeliverSubject = deliver
 		}
-
 		// Do filtering always, server will clear as needed.
 		cfg.FilterSubject = subj
 
@@ -1659,8 +1727,14 @@ func (js *js) subscribe(subj, queue string, cb MsgHandler, ch chan *Msg, isSync,
 	}
 
 	// If we are creating or updating let's process that request.
+	consName := o.cfg.Name
 	if shouldCreate {
-		info, err := js.upsertConsumer(stream, cfg.Durable, ccreq.Config)
+		if cfg.Durable != "" {
+			consName = cfg.Durable
+		} else if consName == "" {
+			consName = getHash(nuid.Next())
+		}
+		info, err := js.upsertConsumer(stream, consName, ccreq.Config)
 		if err != nil {
 			var apiErr *APIError
 			if ok := errors.As(err, &apiErr); !ok {
@@ -1741,7 +1815,9 @@ func (js *js) subscribe(subj, queue string, cb MsgHandler, ch chan *Msg, isSync,
 		if bl < DefaultSubPendingBytesLimit {
 			bl = DefaultSubPendingBytesLimit
 		}
-		sub.SetPendingLimits(maxap, bl)
+		if err := sub.SetPendingLimits(maxap, bl); err != nil {
+			return nil, err
+		}
 	}
 
 	// Do heartbeats last if needed.
@@ -1764,6 +1840,17 @@ func (js *js) subscribe(subj, queue string, cb MsgHandler, ch chan *Msg, isSync,
 	}
 
 	return sub, nil
+}
+
+// InitialConsumerPending returns the number of messages pending to be
+// delivered to the consumer when the subscription was created.
+func (sub *Subscription) InitialConsumerPending() (uint64, error) {
+	sub.mu.Lock()
+	defer sub.mu.Unlock()
+	if sub.jsi == nil || sub.jsi.consumer == _EMPTY_ {
+		return 0, fmt.Errorf("%w: not a JetStream subscription", ErrTypeSubscription)
+	}
+	return sub.jsi.pending, nil
 }
 
 // This long-lived routine is used per ChanSubscription to check
@@ -1855,11 +1942,11 @@ func (sub *Subscription) checkOrderedMsgs(m *Msg) bool {
 	}
 
 	// Normal message here.
-	tokens, err := getMetadataFields(m.Reply)
+	tokens, err := parser.GetMetadataFields(m.Reply)
 	if err != nil {
 		return false
 	}
-	sseq, dseq := uint64(parseNum(tokens[ackStreamSeqTokenPos])), uint64(parseNum(tokens[ackConsumerSeqTokenPos]))
+	sseq, dseq := parser.ParseNum(tokens[parser.AckStreamSeqTokenPos]), parser.ParseNum(tokens[parser.AckConsumerSeqTokenPos])
 
 	jsi := sub.jsi
 	if dseq != jsi.dseq {
@@ -1962,41 +2049,35 @@ func (sub *Subscription) resetOrderedConsumer(sseq uint64) {
 		cfg.DeliverSubject = newDeliver
 		cfg.DeliverPolicy = DeliverByStartSequencePolicy
 		cfg.OptStartSeq = sseq
+		// In case the consumer was created with a start time, we need to clear it
+		// since we are now using a start sequence.
+		cfg.OptStartTime = nil
 
-		ccSubj := fmt.Sprintf(apiLegacyConsumerCreateT, jsi.stream)
-		j, err := json.Marshal(jsi.ccreq)
 		js := jsi.js
 		sub.mu.Unlock()
 
-		if err != nil {
-			pushErr(err)
-			return
+		sub.mu.Lock()
+		// Attempt to delete the existing consumer.
+		// We don't wait for the response since even if it's unsuccessful,
+		// inactivity threshold will kick in and delete it.
+		if jsi.consumer != _EMPTY_ {
+			go js.DeleteConsumer(jsi.stream, jsi.consumer)
 		}
-
-		resp, err := nc.Request(js.apiSubj(ccSubj), j, js.opts.wait)
+		jsi.consumer = ""
+		sub.mu.Unlock()
+		consName := getHash(nuid.Next())
+		cinfo, err := js.upsertConsumer(jsi.stream, consName, cfg)
 		if err != nil {
-			if errors.Is(err, ErrNoResponders) || errors.Is(err, ErrTimeout) {
+			var apiErr *APIError
+			if errors.Is(err, ErrJetStreamNotEnabled) || errors.Is(err, ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
 				// if creating consumer failed, retry
 				return
-			}
-			pushErr(err)
-			return
-		}
-
-		var cinfo consumerResponse
-		err = json.Unmarshal(resp.Data, &cinfo)
-		if err != nil {
-			pushErr(err)
-			return
-		}
-
-		if cinfo.Error != nil {
-			if cinfo.Error.ErrorCode == JSErrCodeInsufficientResourcesErr {
+			} else if errors.As(err, &apiErr) && apiErr.ErrorCode == JSErrCodeInsufficientResourcesErr {
 				// retry for insufficient resources, as it may mean that client is connected to a running
 				// server in cluster while the server hosting R1 JetStream resources is restarting
 				return
 			}
-			pushErr(cinfo.Error)
+			pushErr(err)
 			return
 		}
 
@@ -2109,14 +2190,14 @@ func (nc *Conn) checkForSequenceMismatch(msg *Msg, s *Subscription, jsi *jsSub) 
 		return
 	}
 
-	tokens, err := getMetadataFields(ctrl)
+	tokens, err := parser.GetMetadataFields(ctrl)
 	if err != nil {
 		return
 	}
 
 	// Consumer sequence.
 	var ldseq string
-	dseq := tokens[ackConsumerSeqTokenPos]
+	dseq := tokens[parser.AckConsumerSeqTokenPos]
 	hdr := msg.Header[lastConsumerSeqHdr]
 	if len(hdr) == 1 {
 		ldseq = hdr[0]
@@ -2127,7 +2208,7 @@ func (nc *Conn) checkForSequenceMismatch(msg *Msg, s *Subscription, jsi *jsSub) 
 	if ldseq != dseq {
 		// Dispatch async error including details such as
 		// from where the consumer could be restarted.
-		sseq := parseNum(tokens[ackStreamSeqTokenPos])
+		sseq := parser.ParseNum(tokens[parser.AckStreamSeqTokenPos])
 		if ordered {
 			s.mu.Lock()
 			s.resetOrderedConsumer(jsi.sseq + 1)
@@ -2135,8 +2216,8 @@ func (nc *Conn) checkForSequenceMismatch(msg *Msg, s *Subscription, jsi *jsSub) 
 		} else {
 			ecs := &ErrConsumerSequenceMismatch{
 				StreamResumeSequence: uint64(sseq),
-				ConsumerSequence:     uint64(parseNum(dseq)),
-				LastConsumerSequence: uint64(parseNum(ldseq)),
+				ConsumerSequence:     parser.ParseNum(dseq),
+				LastConsumerSequence: parser.ParseNum(ldseq),
 			}
 			nc.handleConsumerSequenceMismatch(s, ecs)
 		}
@@ -2165,6 +2246,22 @@ type subOpts struct {
 	// For an ordered consumer.
 	ordered bool
 	ctx     context.Context
+
+	// To disable calling ConsumerInfo
+	skipCInfo bool
+}
+
+// SkipConsumerLookup will omit looking up consumer when [Bind], [Durable]
+// or [ConsumerName] are provided.
+//
+// NOTE: This setting may cause an existing consumer to be overwritten. Also,
+// because consumer lookup is skipped, all consumer options like AckPolicy,
+// DeliverSubject etc. need to be provided even if consumer already exists.
+func SkipConsumerLookup() SubOpt {
+	return subOptFn(func(opts *subOpts) error {
+		opts.skipCInfo = true
+		return nil
+	})
 }
 
 // OrderedConsumer will create a FIFO direct/ephemeral consumer for in order delivery of messages.
@@ -2397,6 +2494,7 @@ func EnableFlowControl() SubOpt {
 }
 
 // IdleHeartbeat enables push based consumers to have idle heartbeats delivered.
+// For pull consumers, idle heartbeat has to be set on each [Fetch] call.
 func IdleHeartbeat(duration time.Duration) SubOpt {
 	return subOptFn(func(opts *subOpts) error {
 		opts.cfg.Heartbeat = duration
@@ -2488,6 +2586,24 @@ func ConsumerMemoryStorage() SubOpt {
 	})
 }
 
+// ConsumerName sets the name for a consumer.
+func ConsumerName(name string) SubOpt {
+	return subOptFn(func(opts *subOpts) error {
+		opts.cfg.Name = name
+		return nil
+	})
+}
+
+// ConsumerFilterSubjects can be used to set multiple subject filters on the consumer.
+// It has to be used in conjunction with [nats.BindStream] and
+// with empty 'subject' parameter.
+func ConsumerFilterSubjects(subjects ...string) SubOpt {
+	return subOptFn(func(opts *subOpts) error {
+		opts.cfg.FilterSubjects = subjects
+		return nil
+	})
+}
+
 func (sub *Subscription) ConsumerInfo() (*ConsumerInfo, error) {
 	sub.mu.Lock()
 	// TODO(dlc) - Better way to mark especially if we attach.
@@ -2508,6 +2624,7 @@ type pullOpts struct {
 	maxBytes int
 	ttl      time.Duration
 	ctx      context.Context
+	hb       time.Duration
 }
 
 // PullOpt are the options that can be passed when pulling a batch of messages.
@@ -2521,6 +2638,16 @@ func PullMaxWaiting(n int) SubOpt {
 		opts.cfg.MaxWaiting = n
 		return nil
 	})
+}
+
+type PullHeartbeat time.Duration
+
+func (h PullHeartbeat) configurePull(opts *pullOpts) error {
+	if h <= 0 {
+		return fmt.Errorf("%w: idle heartbeat has to be greater than 0", ErrInvalidArg)
+	}
+	opts.hb = time.Duration(h)
+	return nil
 }
 
 // PullMaxBytes defines the max bytes allowed for a fetch request.
@@ -2566,6 +2693,11 @@ func checkMsg(msg *Msg, checkSts, isNoWait bool) (usrMsg bool, err error) {
 	if !checkSts {
 		return
 	}
+
+	// if it's a heartbeat message, report as not user msg
+	if isHb, _ := isJSControlMessage(msg); isHb {
+		return
+	}
 	switch val {
 	case noResponders:
 		err = ErrNoResponders
@@ -2585,12 +2717,12 @@ func checkMsg(msg *Msg, checkSts, isNoWait bool) (usrMsg bool, err error) {
 			err = ErrTimeout
 		}
 	case jetStream409Sts:
-		if strings.Contains(strings.ToLower(string(msg.Header.Get(descrHdr))), "consumer deleted") {
+		if strings.Contains(strings.ToLower(msg.Header.Get(descrHdr)), "consumer deleted") {
 			err = ErrConsumerDeleted
 			break
 		}
 
-		if strings.Contains(strings.ToLower(string(msg.Header.Get(descrHdr))), "leadership change") {
+		if strings.Contains(strings.ToLower(msg.Header.Get(descrHdr)), "leadership change") {
 			err = ErrConsumerLeadershipChanged
 			break
 		}
@@ -2652,7 +2784,6 @@ func (sub *Subscription) Fetch(batch int, opts ...PullOpt) ([]*Msg, error) {
 	)
 	if ctx == nil {
 		ctx, cancel = context.WithTimeout(context.Background(), ttl)
-		defer cancel()
 	} else if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		// Prevent from passing the background context which will just block
 		// and cannot be canceled either.
@@ -2663,7 +2794,17 @@ func (sub *Subscription) Fetch(batch int, opts ...PullOpt) ([]*Msg, error) {
 		// If the context did not have a deadline, then create a new child context
 		// that will use the default timeout from the JS context.
 		ctx, cancel = context.WithTimeout(ctx, ttl)
-		defer cancel()
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+	defer cancel()
+
+	// if heartbeat is set, validate it against the context timeout
+	if o.hb > 0 {
+		deadline, _ := ctx.Deadline()
+		if 2*o.hb >= time.Until(deadline) {
+			return nil, fmt.Errorf("%w: idle heartbeat value too large", ErrInvalidArg)
+		}
 	}
 
 	// Check if context not done already before making the request.
@@ -2690,7 +2831,7 @@ func (sub *Subscription) Fetch(batch int, opts ...PullOpt) ([]*Msg, error) {
 		// are no messages.
 		msg, err = sub.nextMsgWithContext(ctx, true, false)
 		if err != nil {
-			if err == errNoMessages {
+			if errors.Is(err, errNoMessages) {
 				err = nil
 			}
 			break
@@ -2703,6 +2844,8 @@ func (sub *Subscription) Fetch(batch int, opts ...PullOpt) ([]*Msg, error) {
 			msgs = append(msgs, msg)
 		}
 	}
+	var hbTimer *time.Timer
+	var hbErr error
 	if err == nil && len(msgs) < batch {
 		// For batch real size of 1, it does not make sense to set no_wait in
 		// the request.
@@ -2733,8 +2876,26 @@ func (sub *Subscription) Fetch(batch int, opts ...PullOpt) ([]*Msg, error) {
 			nr.Expires = expires
 			nr.NoWait = noWait
 			nr.MaxBytes = o.maxBytes
+			if 2*o.hb < expires {
+				nr.Heartbeat = o.hb
+			} else {
+				nr.Heartbeat = 0
+			}
 			req, _ := json.Marshal(nr)
-			return nc.PublishRequest(nms, rply, req)
+			if err := nc.PublishRequest(nms, rply, req); err != nil {
+				return err
+			}
+			if o.hb > 0 {
+				if hbTimer == nil {
+					hbTimer = time.AfterFunc(2*o.hb, func() {
+						hbErr = ErrNoHeartbeat
+						cancel()
+					})
+				} else {
+					hbTimer.Reset(2 * o.hb)
+				}
+			}
+			return nil
 		}
 
 		err = sendReq()
@@ -2742,27 +2903,36 @@ func (sub *Subscription) Fetch(batch int, opts ...PullOpt) ([]*Msg, error) {
 			// Ask for next message and wait if there are no messages
 			msg, err = sub.nextMsgWithContext(ctx, true, true)
 			if err == nil {
+				if hbTimer != nil {
+					hbTimer.Reset(2 * o.hb)
+				}
 				var usrMsg bool
 
 				usrMsg, err = checkMsg(msg, true, noWait)
 				if err == nil && usrMsg {
 					msgs = append(msgs, msg)
-				} else if noWait && (err == errNoMessages || err == errRequestsPending) && len(msgs) == 0 {
+				} else if noWait && (errors.Is(err, errNoMessages) || errors.Is(err, errRequestsPending)) && len(msgs) == 0 {
 					// If we have a 404/408 for our "no_wait" request and have
 					// not collected any message, then resend request to
 					// wait this time.
 					noWait = false
 					err = sendReq()
-				} else if err == ErrTimeout && len(msgs) == 0 {
+				} else if errors.Is(err, ErrTimeout) && len(msgs) == 0 {
 					// If we get a 408, we will bail if we already collected some
 					// messages, otherwise ignore and go back calling nextMsg.
 					err = nil
 				}
 			}
 		}
+		if hbTimer != nil {
+			hbTimer.Stop()
+		}
 	}
 	// If there is at least a message added to msgs, then need to return OK and no error
 	if err != nil && len(msgs) == 0 {
+		if hbErr != nil {
+			return nil, hbErr
+		}
 		return nil, o.checkCtxErr(err)
 	}
 	return msgs, nil
@@ -2890,13 +3060,23 @@ func (sub *Subscription) FetchBatch(batch int, opts ...PullOpt) (MessageBatch, e
 		// If the context did not have a deadline, then create a new child context
 		// that will use the default timeout from the JS context.
 		ctx, cancel = context.WithTimeout(ctx, ttl)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
 	}
 	defer func() {
 		// only cancel the context here if we are sure the fetching goroutine has not been started yet
-		if cancel != nil && cancelContext {
+		if cancelContext {
 			cancel()
 		}
 	}()
+
+	// if heartbeat is set, validate it against the context timeout
+	if o.hb > 0 {
+		deadline, _ := ctx.Deadline()
+		if 2*o.hb >= time.Until(deadline) {
+			return nil, fmt.Errorf("%w: idle heartbeat value too large", ErrInvalidArg)
+		}
+	}
 
 	// Check if context not done already before making the request.
 	select {
@@ -2920,7 +3100,7 @@ func (sub *Subscription) FetchBatch(batch int, opts ...PullOpt) (MessageBatch, e
 		// are no messages.
 		msg, err := sub.nextMsgWithContext(ctx, true, false)
 		if err != nil {
-			if err == errNoMessages {
+			if errors.Is(err, errNoMessages) {
 				err = nil
 			}
 			result.err = err
@@ -2951,9 +3131,10 @@ func (sub *Subscription) FetchBatch(batch int, opts ...PullOpt) (MessageBatch, e
 
 	requestBatch := batch - len(result.msgs)
 	req := nextRequest{
-		Expires:  expires,
-		Batch:    requestBatch,
-		MaxBytes: o.maxBytes,
+		Expires:   expires,
+		Batch:     requestBatch,
+		MaxBytes:  o.maxBytes,
+		Heartbeat: o.hb,
 	}
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
@@ -2971,11 +3152,17 @@ func (sub *Subscription) FetchBatch(batch int, opts ...PullOpt) (MessageBatch, e
 		result.err = err
 		return result, nil
 	}
+	var hbTimer *time.Timer
+	var hbErr error
+	if o.hb > 0 {
+		hbTimer = time.AfterFunc(2*o.hb, func() {
+			hbErr = ErrNoHeartbeat
+			cancel()
+		})
+	}
 	cancelContext = false
 	go func() {
-		if cancel != nil {
-			defer cancel()
-		}
+		defer cancel()
 		var requestMsgs int
 		for requestMsgs < requestBatch {
 			// Ask for next message and wait if there are no messages
@@ -2983,11 +3170,14 @@ func (sub *Subscription) FetchBatch(batch int, opts ...PullOpt) (MessageBatch, e
 			if err != nil {
 				break
 			}
+			if hbTimer != nil {
+				hbTimer.Reset(2 * o.hb)
+			}
 			var usrMsg bool
 
 			usrMsg, err = checkMsg(msg, true, false)
 			if err != nil {
-				if err == ErrTimeout {
+				if errors.Is(err, ErrTimeout) {
 					if reqID != "" && !subjectMatchesReqID(msg.Subject, reqID) {
 						// ignore timeout message from server if it comes from a different pull request
 						continue
@@ -3002,7 +3192,11 @@ func (sub *Subscription) FetchBatch(batch int, opts ...PullOpt) (MessageBatch, e
 			}
 		}
 		if err != nil {
-			result.err = o.checkCtxErr(err)
+			if hbErr != nil {
+				result.err = hbErr
+			} else {
+				result.err = o.checkCtxErr(err)
+			}
 		}
 		close(result.msgs)
 		result.done <- struct{}{}
@@ -3012,7 +3206,7 @@ func (sub *Subscription) FetchBatch(batch int, opts ...PullOpt) (MessageBatch, e
 
 // checkCtxErr is used to determine whether ErrTimeout should be returned in case of context timeout
 func (o *pullOpts) checkCtxErr(err error) error {
-	if o.ctx == nil && err == context.DeadlineExceeded {
+	if o.ctx == nil && errors.Is(err, context.DeadlineExceeded) {
 		return ErrTimeout
 	}
 	return err
@@ -3028,7 +3222,7 @@ func (js *js) getConsumerInfoContext(ctx context.Context, stream, consumer strin
 	ccInfoSubj := fmt.Sprintf(apiConsumerInfoT, stream, consumer)
 	resp, err := js.apiRequestWithContext(ctx, js.apiSubj(ccInfoSubj), nil)
 	if err != nil {
-		if err == ErrNoResponders {
+		if errors.Is(err, ErrNoResponders) {
 			err = ErrJetStreamNotEnabled
 		}
 		return nil, err
@@ -3046,6 +3240,9 @@ func (js *js) getConsumerInfoContext(ctx context.Context, stream, consumer strin
 			return nil, ErrStreamNotFound
 		}
 		return nil, info.Error
+	}
+	if info.Error == nil && info.ConsumerInfo == nil {
+		return nil, ErrConsumerNotFound
 	}
 	return info.ConsumerInfo, nil
 }
@@ -3215,72 +3412,6 @@ type MsgMetadata struct {
 	Domain       string
 }
 
-const (
-	ackDomainTokenPos       = 2
-	ackAccHashTokenPos      = 3
-	ackStreamTokenPos       = 4
-	ackConsumerTokenPos     = 5
-	ackNumDeliveredTokenPos = 6
-	ackStreamSeqTokenPos    = 7
-	ackConsumerSeqTokenPos  = 8
-	ackTimestampSeqTokenPos = 9
-	ackNumPendingTokenPos   = 10
-)
-
-func getMetadataFields(subject string) ([]string, error) {
-	const v1TokenCounts = 9
-	const v2TokenCounts = 12
-	const noDomainName = "_"
-
-	const btsep = '.'
-	tsa := [v2TokenCounts]string{}
-	start, tokens := 0, tsa[:0]
-	for i := 0; i < len(subject); i++ {
-		if subject[i] == btsep {
-			tokens = append(tokens, subject[start:i])
-			start = i + 1
-		}
-	}
-	tokens = append(tokens, subject[start:])
-	//
-	// Newer server will include the domain name and account hash in the subject,
-	// and a token at the end.
-	//
-	// Old subject was:
-	// $JS.ACK.<stream>.<consumer>.<delivered>.<sseq>.<cseq>.<tm>.<pending>
-	//
-	// New subject would be:
-	// $JS.ACK.<domain>.<account hash>.<stream>.<consumer>.<delivered>.<sseq>.<cseq>.<tm>.<pending>.<a token with a random value>
-	//
-	// v1 has 9 tokens, v2 has 12, but we must not be strict on the 12th since
-	// it may be removed in the future. Also, the library has no use for it.
-	// The point is that a v2 ACK subject is valid if it has at least 11 tokens.
-	//
-	l := len(tokens)
-	// If lower than 9 or more than 9 but less than 11, report an error
-	if l < v1TokenCounts || (l > v1TokenCounts && l < v2TokenCounts-1) {
-		return nil, ErrNotJSMessage
-	}
-	if tokens[0] != "$JS" || tokens[1] != "ACK" {
-		return nil, ErrNotJSMessage
-	}
-	// For v1 style, we insert 2 empty tokens (domain and hash) so that the
-	// rest of the library references known fields at a constant location.
-	if l == 9 {
-		// Extend the array (we know the backend is big enough)
-		tokens = append(tokens, _EMPTY_, _EMPTY_)
-		// Move to the right anything that is after "ACK" token.
-		copy(tokens[ackDomainTokenPos+2:], tokens[ackDomainTokenPos:])
-		// Clear the domain and hash tokens
-		tokens[ackDomainTokenPos], tokens[ackAccHashTokenPos] = _EMPTY_, _EMPTY_
-
-	} else if tokens[ackDomainTokenPos] == noDomainName {
-		// If domain is "_", replace with empty value.
-		tokens[ackDomainTokenPos] = _EMPTY_
-	}
-	return tokens, nil
-}
-
 // Metadata retrieves the metadata from a JetStream message. This method will
 // return an error for non-JetStream Msgs.
 func (m *Msg) Metadata() (*MsgMetadata, error) {
@@ -3288,43 +3419,22 @@ func (m *Msg) Metadata() (*MsgMetadata, error) {
 		return nil, err
 	}
 
-	tokens, err := getMetadataFields(m.Reply)
+	tokens, err := parser.GetMetadataFields(m.Reply)
 	if err != nil {
 		return nil, err
 	}
 
 	meta := &MsgMetadata{
-		Domain:       tokens[ackDomainTokenPos],
-		NumDelivered: uint64(parseNum(tokens[ackNumDeliveredTokenPos])),
-		NumPending:   uint64(parseNum(tokens[ackNumPendingTokenPos])),
-		Timestamp:    time.Unix(0, parseNum(tokens[ackTimestampSeqTokenPos])),
-		Stream:       tokens[ackStreamTokenPos],
-		Consumer:     tokens[ackConsumerTokenPos],
+		Domain:       tokens[parser.AckDomainTokenPos],
+		NumDelivered: parser.ParseNum(tokens[parser.AckNumDeliveredTokenPos]),
+		NumPending:   parser.ParseNum(tokens[parser.AckNumPendingTokenPos]),
+		Timestamp:    time.Unix(0, int64(parser.ParseNum(tokens[parser.AckTimestampSeqTokenPos]))),
+		Stream:       tokens[parser.AckStreamTokenPos],
+		Consumer:     tokens[parser.AckConsumerTokenPos],
 	}
-	meta.Sequence.Stream = uint64(parseNum(tokens[ackStreamSeqTokenPos]))
-	meta.Sequence.Consumer = uint64(parseNum(tokens[ackConsumerSeqTokenPos]))
+	meta.Sequence.Stream = parser.ParseNum(tokens[parser.AckStreamSeqTokenPos])
+	meta.Sequence.Consumer = parser.ParseNum(tokens[parser.AckConsumerSeqTokenPos])
 	return meta, nil
-}
-
-// Quick parser for positive numbers in ack reply encoding.
-func parseNum(d string) (n int64) {
-	if len(d) == 0 {
-		return -1
-	}
-
-	// ASCII numbers 0-9
-	const (
-		asciiZero = 48
-		asciiNine = 57
-	)
-
-	for _, dec := range d {
-		if dec < asciiZero || dec > asciiNine {
-			return -1
-		}
-		n = n*10 + (int64(dec) - asciiZero)
-	}
-	return n
 }
 
 // AckPolicy determines how the consumer should acknowledge delivered messages.
@@ -3373,7 +3483,7 @@ func (p AckPolicy) MarshalJSON() ([]byte, error) {
 	case AckExplicitPolicy:
 		return json.Marshal("explicit")
 	default:
-		return nil, fmt.Errorf("nats: unknown acknowlegement policy %v", p)
+		return nil, fmt.Errorf("nats: unknown acknowledgement policy %v", p)
 	}
 }
 
@@ -3659,4 +3769,65 @@ func (st *StorageType) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("nats: can not unmarshal %q", data)
 	}
 	return nil
+}
+
+type StoreCompression uint8
+
+const (
+	NoCompression StoreCompression = iota
+	S2Compression
+)
+
+func (alg StoreCompression) String() string {
+	switch alg {
+	case NoCompression:
+		return "None"
+	case S2Compression:
+		return "S2"
+	default:
+		return "Unknown StoreCompression"
+	}
+}
+
+func (alg StoreCompression) MarshalJSON() ([]byte, error) {
+	var str string
+	switch alg {
+	case S2Compression:
+		str = "s2"
+	case NoCompression:
+		str = "none"
+	default:
+		return nil, fmt.Errorf("unknown compression algorithm")
+	}
+	return json.Marshal(str)
+}
+
+func (alg *StoreCompression) UnmarshalJSON(b []byte) error {
+	var str string
+	if err := json.Unmarshal(b, &str); err != nil {
+		return err
+	}
+	switch str {
+	case "s2":
+		*alg = S2Compression
+	case "none":
+		*alg = NoCompression
+	default:
+		return fmt.Errorf("unknown compression algorithm")
+	}
+	return nil
+}
+
+// Length of our hash used for named consumers.
+const nameHashLen = 8
+
+// Computes a hash for the given `name`.
+func getHash(name string) string {
+	sha := sha256.New()
+	sha.Write([]byte(name))
+	b := sha.Sum(nil)
+	for i := 0; i < nameHashLen; i++ {
+		b[i] = rdigits[int(b[i]%base)]
+	}
+	return string(b[:nameHashLen])
 }

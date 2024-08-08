@@ -4,20 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	prom_config "github.com/prometheus/common/config"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/kubernetes"
-	kutil "kmodules.xyz/client-go"
+	cu "kmodules.xyz/client-go/client"
 	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-
-	prom_config "github.com/prometheus/common/config"
 
 	"k8s.io/client-go/rest"
 
@@ -42,28 +37,17 @@ type ServiceReference struct {
 }
 
 func ToPrometheusConfigFromServiceAccount(cfg *rest.Config, sa types.NamespacedName, ref ServiceReference) (*prometheus.Config, error) {
-	kc, err := kubernetes.NewForConfig(cfg)
+	cc, err := cu.NewUncachedClient(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	var caData, tokenData []byte
-	err = wait.PollImmediate(kutil.RetryInterval, kutil.RetryTimeout, func() (done bool, err error) {
-		secret, err := kc.CoreV1().Secrets(sa.Namespace).Get(context.TODO(), sa.Name, metav1.GetOptions{})
-		if apierrors.IsNotFound(err) {
-			return false, nil
-		} else if err != nil {
-			return false, err
-		}
-
-		var caFound, tokenFound bool
-		caData, caFound = secret.Data["ca.crt"]
-		tokenData, tokenFound = secret.Data["token"]
-		return caFound && tokenFound, nil
-	})
+	secret, err := cu.GetServiceAccountTokenSecret(cc, sa)
 	if err != nil {
 		return nil, err
 	}
+	caData := secret.Data["ca.crt"]
+	tokenData := secret.Data["token"]
 
 	certDir, err := os.MkdirTemp(os.TempDir(), "prometheus-*")
 	if err != nil {
@@ -151,7 +135,7 @@ func main() {
 	//})
 	promConfig, err := ToPrometheusConfigFromServiceAccount(cfg,
 		types.NamespacedName{
-			Namespace: "default",
+			Namespace: "monitoring",
 			Name:      "trickster",
 		},
 		ServiceReference{
