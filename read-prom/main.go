@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	prom_config "github.com/prometheus/common/config"
-	"k8s.io/apimachinery/pkg/types"
 	"log"
 	"os"
 	"path/filepath"
@@ -13,10 +11,14 @@ import (
 	"strings"
 	"time"
 
+	prom_config "github.com/prometheus/common/config"
+	"k8s.io/apimachinery/pkg/types"
+
 	"k8s.io/client-go/rest"
 
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/tamalsaha/prometheus-demo/prometheus"
+	cu "kmodules.xyz/client-go/client"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -36,36 +38,37 @@ type ServiceReference struct {
 }
 
 func ToPrometheusConfigFromServiceAccount(cfg *rest.Config, sa types.NamespacedName, ref ServiceReference) (*prometheus.Config, error) {
-	//cc, err := cu.NewUncachedClient(cfg)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//secret, err := cu.GetServiceAccountTokenSecret(cc, sa)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//caData := secret.Data["ca.crt"]
-	//tokenData := secret.Data["token"]
-	//
-	//certDir, err := os.MkdirTemp(os.TempDir(), "prometheus-*")
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//caFile := filepath.Join(certDir, "ca.crt")
-	//if err := os.WriteFile(caFile, caData, 0o644); err != nil {
-	//	return nil, err
-	//}
+	cc, err := cu.NewUncachedClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	secret, err := cu.GetServiceAccountTokenSecret(cc, sa)
+	if err != nil {
+		return nil, err
+	}
+	caData := secret.Data["ca.crt"]
+	tokenData := secret.Data["token"]
+
+	certDir, err := os.MkdirTemp(os.TempDir(), "prometheus-*")
+	if err != nil {
+		return nil, err
+	}
+
+	caFile := filepath.Join(certDir, "ca.crt")
+	if err := os.WriteFile(caFile, caData, 0o644); err != nil {
+		return nil, err
+	}
 
 	return &prometheus.Config{
-		Addr:        "https://rancher01.elogic.cloud/k8s/clusters/c-m-w5q4j76m/api/v1/namespaces/cattle-monitoring-system/services/http:rancher-monitoring-prometheus:9090/proxy/",
-		BearerToken: "kubeconfig-u-zi6xmbzl358ntrk:7q4z5v8hnrkt6rvnzcdv6rqtfnqrjz2b5d9jmddnxwtzqt5dbhp2w2",
+		// Addr:        fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:%s:%d/proxy/", cfg.Host, ref.Namespace, ref.Scheme, ref.Name, ref.Port),
+		Addr:        "https://thanos-querier-openshift-monitoring.apps.pmmswrjj775acdea26.centralindia.aroapp.io",
 		ProxyURL:    "",
+		BearerToken: string(tokenData),
 		TLSConfig: prom_config.TLSConfig{
-			CAFile:             "",
-			ServerName:         "",
-			InsecureSkipVerify: false,
+			CAFile:             caFile,
+			ServerName:         cfg.TLSClientConfig.ServerName,
+			InsecureSkipVerify: cfg.TLSClientConfig.Insecure,
 		},
 	}, nil
 }
@@ -134,16 +137,27 @@ func main() {
 	//	Namespace: "monitoring",
 	//	Port:      9090,
 	//})
+	//promConfig, err := ToPrometheusConfigFromServiceAccount(cfg,
+	//	types.NamespacedName{
+	//		Namespace: "monitoring",
+	//		Name:      "trickster",
+	//	},
+	//	ServiceReference{
+	//		Scheme:    "http",
+	//		Name:      "rancher-monitoring-prometheus",
+	//		Namespace: "cattle-monitoring-system",
+	//		Port:      9090,
+	//	})
 	promConfig, err := ToPrometheusConfigFromServiceAccount(cfg,
 		types.NamespacedName{
-			Namespace: "monitoring",
-			Name:      "trickster",
+			Namespace: "kubeops",
+			Name:      "kube-ui-server",
 		},
 		ServiceReference{
-			Scheme:    "http",
-			Name:      "rancher-monitoring-prometheus",
-			Namespace: "cattle-monitoring-system",
-			Port:      9090,
+			Scheme:    "https",
+			Namespace: "openshift-monitoring",
+			Name:      "thanos-querier",
+			Port:      9091,
 		})
 	pc, err := promConfig.NewPrometheusClient()
 	if err != nil {
