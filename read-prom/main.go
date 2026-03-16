@@ -6,7 +6,6 @@ import (
 	"fmt"
 	prom_config "github.com/prometheus/common/config"
 	"k8s.io/apimachinery/pkg/types"
-	cu "kmodules.xyz/client-go/client"
 	"log"
 	"os"
 	"path/filepath"
@@ -37,36 +36,36 @@ type ServiceReference struct {
 }
 
 func ToPrometheusConfigFromServiceAccount(cfg *rest.Config, sa types.NamespacedName, ref ServiceReference) (*prometheus.Config, error) {
-	cc, err := cu.NewUncachedClient(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	secret, err := cu.GetServiceAccountTokenSecret(cc, sa)
-	if err != nil {
-		return nil, err
-	}
-	caData := secret.Data["ca.crt"]
-	tokenData := secret.Data["token"]
-
-	certDir, err := os.MkdirTemp(os.TempDir(), "prometheus-*")
-	if err != nil {
-		return nil, err
-	}
-
-	caFile := filepath.Join(certDir, "ca.crt")
-	if err := os.WriteFile(caFile, caData, 0o644); err != nil {
-		return nil, err
-	}
+	//cc, err := cu.NewUncachedClient(cfg)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//secret, err := cu.GetServiceAccountTokenSecret(cc, sa)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//caData := secret.Data["ca.crt"]
+	//tokenData := secret.Data["token"]
+	//
+	//certDir, err := os.MkdirTemp(os.TempDir(), "prometheus-*")
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//caFile := filepath.Join(certDir, "ca.crt")
+	//if err := os.WriteFile(caFile, caData, 0o644); err != nil {
+	//	return nil, err
+	//}
 
 	return &prometheus.Config{
-		Addr:        fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:%s:%d/proxy/", cfg.Host, ref.Namespace, ref.Scheme, ref.Name, ref.Port),
-		BearerToken: string(tokenData),
+		Addr:        "https://rancher01.elogic.cloud/k8s/clusters/c-m-w5q4j76m/api/v1/namespaces/cattle-monitoring-system/services/http:rancher-monitoring-prometheus:9090/proxy/",
+		BearerToken: "kubeconfig-u-zi6xmbzl358ntrk:7q4z5v8hnrkt6rvnzcdv6rqtfnqrjz2b5d9jmddnxwtzqt5dbhp2w2",
 		ProxyURL:    "",
 		TLSConfig: prom_config.TLSConfig{
-			CAFile:             caFile,
-			ServerName:         cfg.TLSClientConfig.ServerName,
-			InsecureSkipVerify: cfg.TLSClientConfig.Insecure,
+			CAFile:             "",
+			ServerName:         "",
+			InsecureSkipVerify: false,
 		},
 	}, nil
 }
@@ -96,7 +95,7 @@ func ToPrometheusConfig(cfg *rest.Config, ref ServiceReference) (*prometheus.Con
 	}
 
 	return &prometheus.Config{
-		Addr: fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:%s:%d/proxy/", cfg.Host, ref.Namespace, ref.Scheme, ref.Name, ref.Port),
+		Addr: "https://rancher01.elogic.cloud/k8s/clusters/c-m-w5q4j76m/api/v1/namespaces/cattle-monitoring-system/services/http:rancher-monitoring-prometheus:9090/proxy/",
 		BasicAuth: prometheus.BasicAuth{
 			Username:     cfg.Username,
 			Password:     cfg.Password,
@@ -114,6 +113,8 @@ func ToPrometheusConfig(cfg *rest.Config, ref ServiceReference) (*prometheus.Con
 		},
 	}, nil
 }
+
+// https://rancher01.elogic.cloud/k8s/clusters/c-m-w5q4j76m/api/v1/namespaces/cattle-monitoring-system/services/http:rancher-monitoring-prometheus:9090/proxy/
 
 // ref: https://kubernetes.io/docs/tasks/administer-cluster/access-cluster-services/#manually-constructing-apiserver-proxy-urls
 func main() {
@@ -140,8 +141,8 @@ func main() {
 		},
 		ServiceReference{
 			Scheme:    "http",
-			Name:      "kube-prometheus-stack-prometheus",
-			Namespace: "monitoring",
+			Name:      "rancher-monitoring-prometheus",
+			Namespace: "cattle-monitoring-system",
 			Port:      9090,
 		})
 	pc, err := promConfig.NewPrometheusClient()

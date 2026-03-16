@@ -186,7 +186,7 @@ func main() {
 		// Address: "http://localhost:9090/2.42536768-fac2-4403-aa23-2a3092ffa6c9",
 		// Address: "https://172.233.230.15/prometheus/2.42536768-fac2-4403-aa23-2a3092ffa6c9",
 
-		Address: "http://localhost:9090/2.39425934-93cc-4776-be30-1614b52924f4",
+		Address: "http://localhost:9090/2.8a6ead99-3404-44ca-b410-e17865ff71ab",
 		Client:  http.DefaultClient,
 	})
 	if err != nil {
