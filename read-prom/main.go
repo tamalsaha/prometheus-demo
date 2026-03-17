@@ -11,15 +11,19 @@ import (
 	"strings"
 	"time"
 
-	prom_config "github.com/prometheus/common/config"
-	"k8s.io/apimachinery/pkg/types"
-
-	"k8s.io/client-go/rest"
-
 	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
+	prom_config "github.com/prometheus/common/config"
 	"github.com/tamalsaha/prometheus-demo/prometheus"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
 	cu "kmodules.xyz/client-go/client"
+	promclient "kmodules.xyz/monitoring-agent-api/client"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
 var tmpDir = func() string {
@@ -120,7 +124,7 @@ func ToPrometheusConfig(cfg *rest.Config, ref ServiceReference) (*prometheus.Con
 // https://rancher01.elogic.cloud/k8s/clusters/c-m-w5q4j76m/api/v1/namespaces/cattle-monitoring-system/services/http:rancher-monitoring-prometheus:9090/proxy/
 
 // ref: https://kubernetes.io/docs/tasks/administer-cluster/access-cluster-services/#manually-constructing-apiserver-proxy-urls
-func main() {
+func main_() {
 	cfg := ctrl.GetConfigOrDie()
 
 	//// k port-forward sts/prometheus-kube-prometheus-stack-prometheus 9090:9090 -n monitoring
@@ -210,4 +214,56 @@ func getPromQueryResult(pc promv1.API, promQuery string) (map[string]float64, er
 	}
 
 	return metricsMap, nil
+}
+
+func main() {
+	if err := useKubebuilderClient(); err != nil {
+		panic(err)
+	}
+}
+func useKubebuilderClient() error {
+	scheme := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(scheme)
+
+	ctx := ctrl.SetupSignalHandler()
+
+	cfg := ctrl.GetConfigOrDie()
+	mgr, err := manager.New(cfg, manager.Options{
+		Scheme:                 scheme,
+		Metrics:                metricsserver.Options{BindAddress: ""},
+		HealthProbeBindAddress: "",
+		LeaderElection:         false,
+		LeaderElectionID:       "5b87adeb.ui-server.kubeops.dev",
+	})
+	if err != nil {
+		return err
+	}
+
+	builder, err := promclient.NewBuilder(mgr, nil)
+	if err != nil {
+		return err
+	}
+	if err := builder.Setup(); err != nil {
+		return err
+	}
+
+	mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		pc, err := builder.GetPrometheusClient()
+		if err != nil {
+			klog.ErrorS(err, "failed to create Prometheus client")
+		}
+		promCPUQuery := `up`
+
+		res, err := getPromQueryResult(pc, promCPUQuery)
+		if err != nil {
+			log.Fatalf("failed to get prometheus cpu query result, reason: %v", err)
+		}
+		data, _ := json.MarshalIndent(res, "", "  ")
+		fmt.Println(string(data))
+		return nil
+	}))
+
+	mgr.Start(ctx)
+	select {}
+	return nil
 }
